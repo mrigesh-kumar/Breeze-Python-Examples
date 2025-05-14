@@ -1,17 +1,23 @@
-from breeze_connect import BreezeConnect
 import sys
 import bisect
 import datetime
 import mibian   #to easily calculate iv and greeks  (not the fastest way though)
+import configparser
+import os
+from breeze_connect import BreezeConnect
 
 flt_rf = 0.058
 int_days_to_expiry = (datetime.datetime(2023,4,27, 0, 0, 0) - datetime.datetime.today()).days
 
-sys.path.append('/media/builder/briefcase/Documents/')
+# Read config
+config = configparser.RawConfigParser()
+config_path = os.path.join(os.path.dirname(__file__), 'config.properties')
+config.read(config_path)
 
-from breeze_configs import Breeze_Configs
+api_key = config['DEFAULT']['app_key']
+api_secret = config['DEFAULT']['secret_key']
+session_token = config['DEFAULT']['session_token']
 
-configs = Breeze_Configs()
 def n_highest(int_strikes_away, flt_spot, list_strikes):
     '''
     REQUIRES: 
@@ -29,24 +35,43 @@ def n_highest(int_strikes_away, flt_spot, list_strikes):
     flt_next_highest_strike = a[bisect.bisect_left(a, flt_spot) + int_strikes_away - 1]
     return flt_next_highest_strike
 
-app = BreezeConnect(api_key=configs.api_key)
-app.generate_session(api_secret=configs.api_secret,
-                     session_token=configs.session_token)
+app = BreezeConnect(api_key=api_key)
+app.generate_session(api_secret=api_secret, session_token=session_token)
 
-list_call_chain = app.get_option_chain_quotes(
+# Fetch option chain data with error handling
+call_response = app.get_option_chain_quotes(
     stock_code='CNXBAN',
     exchange_code='NFO',
     right='call',
     expiry_date=datetime.date(2023,4,27).strftime(r'%d-%b-%Y'),
-    product_type='options'                        
-    )['Success']
-list_put_chain = app.get_option_chain_quotes(
+    product_type='options'
+)
+put_response = app.get_option_chain_quotes(
     stock_code='CNXBAN',
     exchange_code='NFO',
     right='put',
     expiry_date=datetime.date(2023,4,27).strftime(r'%d-%b-%Y'),
-    product_type='options'                        
-    )['Success']
+    product_type='options'
+)
+
+list_call_chain = call_response.get('Success')
+list_put_chain = put_response.get('Success')
+
+if not list_call_chain or not isinstance(list_call_chain, list):
+    print('[ERROR] No call option chain data returned:', call_response)
+    list_call_chain = []
+if not list_put_chain or not isinstance(list_put_chain, list):
+    print('[ERROR] No put option chain data returned:', put_response)
+    list_put_chain = []
+
+if 'Error' in call_response:
+    print('[API ERROR - CALL]:', call_response['Error'])
+if 'Error' in put_response:
+    print('[API ERROR - PUT]:', put_response['Error'])
+
+if not list_call_chain or not list_put_chain:
+    print('[FATAL] No option chain data available. Exiting.')
+    sys.exit(1)
 
 list_call_chain = [item for item in list_call_chain if item['ltt']!='']
 list_put_chain = [item for item in list_put_chain if item['ltt']!='']
@@ -106,4 +131,4 @@ list_put_chain[ind_zero_delta]
 #? let's assume that we want to pay less than 100 as premium for any OTM call
 
 
-https://api.icicidirect.com/apiuser/home
+# https://api.icicidirect.com/apiuser/home

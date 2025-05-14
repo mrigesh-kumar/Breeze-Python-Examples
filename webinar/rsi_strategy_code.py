@@ -17,7 +17,7 @@ key_session = keys[2]
 
 
 breeze = BreezeConnect(api_key=key_api)
-breeze.generate_session(api_secret=key_secret, session_token=key_session)
+breeze.generate_session(api_secret=key_secret, session_token="51318682")
 
 class RSIStrategy(bt.Strategy):
     params = (
@@ -27,7 +27,7 @@ class RSIStrategy(bt.Strategy):
     )
 
     def __init__(self):
-        self. rsi = bt.indicators.RelativeStrengthIndex(period=self.params.rsi_period)
+        self.rsi = bt.indicators.RelativeStrengthIndex(period=self.params.rsi_period)
 
     def next(self):
         if self.rsi < self.params.rsi_oversold:
@@ -110,5 +110,3 @@ if __name__ == "__main__":
     # #Run the Backtest
     cerebro.run()
     cerebro.plot()
-
-

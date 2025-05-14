@@ -1,8 +1,8 @@
 #intialize keys
 
-api_key = "INSERT_YOUR_APP_KEY_HERE"
-api_secret = "INSERT_YOUR_SECRET_KEY_HERE"
-api_session = 'INSERT_YOUR_API_SESSION_HERE'
+api_key = "65yG9N5ie17_7192085Sl92k987h3e58"
+api_secret = "tW5J%88C0n^9428+l2M(5%3971849716"
+session_token = "51318682"
 
 # *********************************************************************************************************************************************************************
 
@@ -16,7 +16,7 @@ from breeze_connect import BreezeConnect
 
 # Setup my API keys 
 api = BreezeConnect(api_key=api_key)
-api.generate_session(api_secret=api_secret,session_token=api_session)
+api.generate_session(api_secret=api_secret,session_token=session_token)
 
 
 # *********************************************************************************************************************************************************************

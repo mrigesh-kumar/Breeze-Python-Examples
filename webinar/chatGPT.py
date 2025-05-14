@@ -1,12 +1,22 @@
-#Configure the strategy using API Keys and set stoploss/takeprofit level.
-api_key = "YOUR_APP_KEY"
-api_secret = "YOUR_SECRET_KEY"
-api_session = 'YOUR_SESSION_KEY'
+import configparser
+import os
+import datetime
+import time
 
-#Import the library
+# Read config from properties file
+config = configparser.RawConfigParser(interpolation=None)
+config_path = os.path.join(os.path.dirname(__file__), 'config.properties')
+config.read(config_path)
+
+def get_config(key):
+    return config['DEFAULT'].get(key) if 'DEFAULT' in config else config.get(key)
+
+api_key = get_config('app_key')
+api_secret = get_config('secret_key')
+api_session = get_config('session_token')
+
 from breeze_connect import BreezeConnect
 
-#Create API library object
 api = BreezeConnect(api_key=api_key)
 api.generate_session(api_secret=api_secret,session_token=api_session)
 
@@ -20,7 +30,7 @@ def place():
                         action="buy",
                         order_type="market",
                         stoploss="",
-                        quantity="50",
+                        quantity="75",
                         price="",
                         validity="day",
                         validity_date="2023-07-19T06:00:00.000Z",
@@ -45,7 +55,7 @@ def squareoff():
                             order_type="market",
                             validity="day",
                             stoploss="0",
-                            quantity="50",
+                            quantity="75",
                             price="0",
                             validity_date="2023-07-19T06:00:00.000Z",
                             trade_password="",

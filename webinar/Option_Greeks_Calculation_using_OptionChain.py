@@ -9,12 +9,22 @@ from scipy.optimize import brentq
 import numpy as np
 from datetime import datetime
 
+# API Credentials
+app_key = "65yG9N5ie17_7192085Sl92k987h3e58"
+secret_key = "tW5J%88C0n^9428+l2M(5%3971849716"
+session_key = "51316056"
+
 #Connecting to Breeze 
 breeze = BreezeConnect(api_key=str(app_key))
 
 print("https://api.icicidirect.com/apiuser/login?api_key="+urllib.parse.quote_plus(str(app_key)))
 
-breeze.generate_session(api_secret=str(secret_key),session_token=str(session_key))
+try:
+    breeze.generate_session(api_secret=str(secret_key),session_token="51318682")
+except Exception as e:
+    print(f"Session error: {str(e)}")
+    print("Please get a new session token from the Breeze API portal")
+    exit(1)
 
 #Finding price of an option
 
@@ -105,16 +115,76 @@ Spot = Quotes["Success"][0]["ltp"]
 ATM = round((Quotes["Success"][0]["ltp"])/50)*50
 print(ATM)
 
+# Known NIFTY monthly expiry dates (last Thursday of each month)
+expiry_dates = [
+    "2024-05-02T06:00:00.000Z",  # May 2nd expiry
+    "2024-05-09T06:00:00.000Z",  # May 9th expiry
+    "2024-05-16T06:00:00.000Z",  # May 16th expiry
+    "2024-05-23T06:00:00.000Z",  # May 23rd expiry
+    "2024-05-30T06:00:00.000Z",  # May 30th expiry
+]
+
+success = False
+for expiry_date in expiry_dates:
+    print(f"\nTrying expiry date: {expiry_date}")
+    
+    # Simulate the data retrieval from breeze for Call
+    option_chain_response = breeze.get_option_chain_quotes(stock_code="NIFTY",
+                        exchange_code="NFO",
+                        product_type="options",
+                        expiry_date=expiry_date,
+                        right="call")
+
+    print("\nAPI Response for Call options:")
+    print(option_chain_response)
+
+    if option_chain_response['Success'] is not None:
+        success = True
+        break
+
+if not success:
+    print("\nFailed to fetch option chain data with any expiry date.")
+    print("This could be because:")
+    print("1. The market is closed (weekend/holiday)")
+    print("2. The session token has expired")
+    print("3. None of the tried expiry dates are valid")
+    print("\nPlease verify:")
+    print("1. It is a trading day")
+    print("2. Your session token is valid")
+    print("3. You have the correct expiry dates")
+    exit(1)
+
+# Continue with the rest of the code using the working expiry_date
+expiry_date = expiry_dates[expiry_dates.index(expiry_date)]
+
+print(f"\nUsing expiry date: {expiry_date}")
+
+print("\nCalculating option prices and Greeks...")
 
 # Simulate the data retrieval from breeze for Call
-df = breeze.get_option_chain_quotes(stock_code="NIFTY",
+option_chain_response = breeze.get_option_chain_quotes(stock_code="NIFTY",
                     exchange_code="NFO",
                     product_type="options",
-                    expiry_date="2024-08-14T06:00:00.000Z",
-                    right="call")["Success"]
+                    expiry_date=expiry_date,
+                    right="call")
+
+# Debug: Print API response
+print("\nAPI Response for Call options:")
+print(option_chain_response)
+
+if option_chain_response['Success'] is None:
+    print(f"Error fetching option chain: {option_chain_response['Error']}")
+    exit(1)
+
+df = option_chain_response["Success"]
 
 # Convert to DataFrame
 df = pd.DataFrame(df)
+
+# Debug: Print DataFrame info
+print("DataFrame columns:", df.columns.tolist())
+print("\nDataFrame head:")
+print(df.head())
 
 # Convert strike_price to float
 df['strike_price'] = df['strike_price'].astype(float)
@@ -236,14 +306,30 @@ else:
 
 # Option greeks for Put
 
-df = breeze.get_option_chain_quotes(stock_code="NIFTY",
+# Simulate the data retrieval from breeze for Put
+option_chain_response = breeze.get_option_chain_quotes(stock_code="NIFTY",
                     exchange_code="NFO",
                     product_type="options",
-                    expiry_date="2024-08-14T06:00:00.000Z",
-                    right="put")["Success"]
+                    expiry_date=expiry_date,
+                    right="put")
+
+# Debug: Print API response
+print("\nAPI Response for Put options:")
+print(option_chain_response)
+
+if option_chain_response['Success'] is None:
+    print(f"Error fetching option chain: {option_chain_response['Error']}")
+    exit(1)
+
+df = option_chain_response["Success"]
 
 # Convert to DataFrame
 df = pd.DataFrame(df)
+
+# Debug: Print DataFrame info
+print("DataFrame columns:", df.columns.tolist())
+print("\nDataFrame head:")
+print(df.head())
 
 # Convert strike_price to float
 df['strike_price'] = df['strike_price'].astype(float)

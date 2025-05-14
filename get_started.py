@@ -11,7 +11,7 @@ from breeze_connect import BreezeConnect
 
 # Setup my API keys 
 api = BreezeConnect(api_key=api_key)
-api.generate_session(api_secret=api_secret,session_token=api_session)
+api.generate_session(api_secret=api_secret,session_token="51318682")
 
 STOCK = api.get_names('NSE', STOCK)['isec_stock_code']
 

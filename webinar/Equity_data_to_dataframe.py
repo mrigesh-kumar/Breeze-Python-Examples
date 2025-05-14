@@ -3,9 +3,9 @@
 
 
 #intialize keys
-api_key = "INSERT_YOUR_APP_KEY_HERE"
-api_secret = "INSERT_YOUR_SECRET_KEY_HERE"
-api_session = 'INSERT_YOUR_API_SESSION_HERE'
+api_key = "65yG9N5ie17_7192085Sl92k987h3e58"
+api_secret = "tW5J%88C0n^9428+l2M(5%3971849716"
+api_session = '51316243'
 
 #import libraries
 from breeze_connect import BreezeConnect
@@ -19,7 +19,7 @@ api.generate_session(api_secret=api_secret,
 
 
 # Fetch Data using historical data API v2
-data = api.get_historical_data_v2(interval="1minute",
+data = api.get_historical_data_v2(interval="5minute",
                             from_date= "2022-08-15T07:00:00.000Z",
                             to_date= "2022-08-17T07:00:00.000Z",
                             stock_code="ITC",

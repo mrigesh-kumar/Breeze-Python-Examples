@@ -15,7 +15,7 @@ api = BreezeConnect(api_key=api_key)
 
 # Generate Session
 api.generate_session(api_secret=api_secret,
-                      session_token=api_session)
+                      session_token="51318682")
 
 
 # Place Option Plus order. 

@@ -1,78 +1,86 @@
-# code used in [Researching trading strategies using Pandas framework](https://www.youtube.com/watch?v=I4BAUYUyr7Q)
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 
-df_hdata = pd.read_csv('/home/builder/Downloads/ICICIBANK_HistoricalData.csv')
-df_hdata.shape
-df_hdata.columns
-df_hdata.head(10)
-df_hdata.tail()
+SESSION_TOKEN = "51316056"  # Not used for this simulation
 
-df_close = df_hdata[['datetime', 'close']].copy()
-df_close.shape
-df_close.columns
-df_close.head()
-df_close.tail()
-df_close['close'].max()
-df_close['close'].min()
+# Load historical data
+# Assumes 'datetime' is in yyyy-mm-dd format and 'close' is float
+# You may want to parse dates for more advanced logic
 
-#let's take a look at the chart, how does it look, get a feel for it
-df_close['close'].plot(fontsize = 12)
-plt.grid()
-plt.ylabel('Price in Rupees')
-plt.show()
+df_hdata = pd.read_csv('/Users/mrigeshkumar/Documents/Historical Data/ICICIBANK_HistoricalData.csv')
 
-# Create 20 days simple moving average column
-df_close['20_SMA'] = df_close['close'].rolling(window = 20, min_periods = 20).mean()
-# Create 50 days simple moving average column
-df_close['50_SMA'] = df_close['close'].rolling(window = 50, min_periods = 50).mean()
-# take a peep
-df_close.head(25)
-df_close.tail()
+# --- Simulation Parameters ---
+START_CAPITAL = 100_000
+LOT_SIZE = 550  # ICICI Bank F&O lot size
+MIN_TRADE_DAYS = 10
 
-# plot short and long moving averages 
-plt.figure(figsize = (20, 10))
-#ultratech_df['Close Price'].plot(color = 'k', lw = 1)
-df_close['close'].plot(color = 'r', lw = 1)
-df_close['20_SMA'].plot(color = 'b', lw = 1)
-df_close['50_SMA'].plot(color = 'g', lw = 1)
-plt.grid()
-plt.show()
+# --- Calculate Indicators for Strategy Logic ---
+df_hdata['SMA20'] = df_hdata['close'].rolling(window=20).mean()
+df_hdata['SMA50'] = df_hdata['close'].rolling(window=50).mean()
+df_hdata['RSI'] = 100 - (100 / (1 + df_hdata['close'].pct_change().add(1).rolling(window=14).mean()))
 
-# generate signals
-df_close['Signal'] = 0.0  
-df_close['Signal'] = np.where(df_close['20_SMA'] > df_close['50_SMA'], 1.0, 0.0) 
+# --- Virtual Straddle Simulation ---
+capital = START_CAPITAL
+trade_log = []
+trade_count = 0
 
+# Use every 5th day for simulation (to get at least 10 trades if enough data)
+sim_days = df_hdata.iloc[::max(len(df_hdata)//MIN_TRADE_DAYS,1)].head(MIN_TRADE_DAYS)
 
-# create a new column 'Position' which is a day-to-day difference of the 'Signal' column. 
-df_close['Position'] = df_close['Signal'].diff()
+for idx, row in sim_days.iterrows():
+    date = row['datetime']
+    open_price = row['open'] if 'open' in row else row['close']
+    close_price = row['close']
+    sma20 = row['SMA20']
+    sma50 = row['SMA50']
+    rsi = row['RSI']
+    # --- Strategy Logic ---
+    # If price > SMA20 and SMA20 > SMA50 and RSI < 65: Bullish bias, else straddle
+    if pd.notna(sma20) and pd.notna(sma50) and open_price > sma20 > sma50 and (pd.isna(rsi) or rsi < 65):
+        strategy = 'Bullish Straddle'
+    elif pd.notna(sma20) and pd.notna(sma50) and open_price < sma20 < sma50 and (pd.isna(rsi) or rsi > 35):
+        strategy = 'Bearish Straddle'
+    else:
+        strategy = 'Neutral Straddle'
 
-# display the dataframe
-df_close.tail(10)
+    # --- Straddle Simulation ---
+    strike = round(open_price/10)*10
+    call_premium_buy = max(open_price - strike, 0)
+    put_premium_buy = max(strike - open_price, 0)
+    total_premium_paid = (call_premium_buy + put_premium_buy) * LOT_SIZE
 
-# visualize the strategy as it would play out
-plt.figure(figsize = (20,10))
-plt.tick_params(axis = 'both', labelsize = 14)
-# plot close price, short-term and long-term moving averages 
-df_close['close'].plot(color = 'k', lw = 1, label = 'Close Price')  
-df_close['20_SMA'].plot(color = 'b', lw = 1, label = '20-day SMA') 
-df_close['50_SMA'].plot(color = 'g', lw = 1, label = '50-day SMA') 
+    # At close, calculate intrinsic value (simplified, ignores time decay)
+    call_intrinsic = max(close_price - strike, 0)
+    put_intrinsic = max(strike - close_price, 0)
+    total_intrinsic = (call_intrinsic + put_intrinsic) * LOT_SIZE
 
-# plot 'buy' signals
-plt.plot(df_close[df_close['Position'] == 1].index, 
-         df_close['20_SMA'][df_close['Position'] == 1], 
-         '^', markersize = 15, color = 'g', alpha = 0.7, label = 'buy')
+    profit = total_intrinsic - total_premium_paid
+    capital += profit
+    trade_count += 1
+    trade_log.append({
+        'Date': date,
+        'Strategy': strategy,
+        'Strike': strike,
+        'OpenPrice': open_price,
+        'ClosePrice': close_price,
+        'CallBuy': call_premium_buy,
+        'PutBuy': put_premium_buy,
+        'PremiumPaid': total_premium_paid,
+        'CallIntrinsic': call_intrinsic,
+        'PutIntrinsic': put_intrinsic,
+        'Profit': profit,
+        'Capital': capital
+    })
+    print(f"{date}: {strategy} | Strike: {strike} | P&L: {profit:.2f} | Capital: {capital:.2f}")
 
-# plot 'sell' signals 
-plt.plot(df_close[df_close['Position'] == -1].index, 
-         df_close['20_SMA'][df_close['Position'] == -1], 
-         'v', markersize = 15, color = 'r', alpha = 0.7, label = 'sell')
-plt.ylabel('Price in Rupees', fontsize = 15 )
-plt.xlabel('Date', fontsize = 15 )
-plt.title('ICICIBANK - SMA Crossover chart', fontsize = 20)
-plt.legend()
-plt.grid()
-plt.show()
+# --- Summary Log ---
+results = pd.DataFrame(trade_log)
+print("\n--- Trade Log ---")
+print(results[['Date','Strategy','Strike','OpenPrice','ClosePrice','PremiumPaid','Profit','Capital']])
+print(f"\nTotal Trades: {trade_count}")
+print(f"Final Capital: {capital:.2f}")
+print(f"Total P&L: {capital - START_CAPITAL:.2f}")
 
-df_close.to_csv('/home/builder/Downloads/ICICIBANK_SMA20-50_Strategy.csv')
+# Optionally, save log to CSV
+results.to_csv('ICICIBANK_StraddleSimulation_Log.csv', index=False)

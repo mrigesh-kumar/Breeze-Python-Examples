@@ -1,3 +1,5 @@
+from webinar.technical_indicators import TechnicalIndicators
+
 ### Enter your API Keys
 api_key = "INSERT_YOUR_APP_KEY_HERE"
 api_secret = "INSERT_YOUR_SECRET_KEY_HERE"
@@ -14,7 +16,7 @@ breeze = BreezeConnect(api_key=api_key)
 
 # Generate Session
 breeze.generate_session(api_secret=api_secret,
-                        session_token=api_session)
+                        session_token="51318682")
 
 # initialize user inputs
 

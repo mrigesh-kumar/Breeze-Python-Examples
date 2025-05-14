@@ -2,15 +2,15 @@ from breeze_connect import BreezeConnect
 from datetime import datetime
 import pandas as pd
 
-breeze = BreezeConnect(api_key="YOUR_API_KEY")
-breeze.generate_session(api_secret="YOUR_SECRET_KEY", session_token="YOUR_SESSION_TOKEN")
+breeze = BreezeConnect(api_key="65yG9N5ie17_7192085Sl92k987h3e58")
+breeze.generate_session(api_secret="tW5J%88C0n^9428+l2M(5%3971849716", session_token="51484973")
 
-symbol = "CNXBAN"
-time_interval = "1second"
-start_date = datetime(2022, 12, 1, 9, 15,0)
-end_date = datetime(2022, 12, 1, 10, 15,0)
-exchange = "NFO"
-expiry = datetime(2022, 12, 29, 0,0,0)
+symbol = "LIC"
+time_interval = "5minute"
+start_date = datetime(2025, 5, 14, 9, 15,0)
+end_date = datetime(2025, 5, 14, 15, 15,0)
+exchange = "NSE"
+expiry = datetime(2025, 5, 29, 0,0,0)
 
 #!Note how get_names() is used to convert any symbology to any other symbology
 breeze.get_names(exchange_code="NSE", stock_code=symbol)
@@ -27,6 +27,7 @@ breeze.get_names(exchange_code="NSE", stock_code=symbol)
 '''
 
 #! Use get_names to fetch 1second data
+print(start_date)
 data2 = breeze.get_historical_data_v2(interval = time_interval,
                             from_date = start_date,
                             to_date   = end_date,
@@ -36,6 +37,7 @@ data2 = breeze.get_historical_data_v2(interval = time_interval,
                             exchange_code = exchange)
 
 df2 = pd.DataFrame(data2['Success'])
+print(df2)
 
 #!One Click F&O Sockets
 # Connect to Breeze socket
