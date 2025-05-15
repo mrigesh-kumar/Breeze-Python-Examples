@@ -3,7 +3,7 @@ from datetime import datetime
 import pandas as pd
 
 breeze = BreezeConnect(api_key="65yG9N5ie17_7192085Sl92k987h3e58")
-breeze.generate_session(api_secret="tW5J%88C0n^9428+l2M(5%3971849716", session_token="51484973")
+breeze.generate_session(api_secret="tW5J%88C0n^9428+l2M(5%3971849716", session_token="51492365")
 
 symbol = "LIC"
 time_interval = "5minute"

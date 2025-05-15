@@ -213,14 +213,28 @@ class DataHandler:
         actual_exchange_code = exchange_code if exchange_code is not None else self.exchange_code
         actual_product_type = product_type if product_type is not None else self.product_type
         
-        # Create a filename for the cache with all relevant parameters
-        cache_params = {
-            'product': actual_product_type,
-            'stock': actual_stock_code,
-            'interval': api_interval,
-            'exchange': actual_exchange_code
-        }
-        csv_filename = "{product}_{exchange}_{stock}_{interval}.csv".format(**cache_params)
+        # Unified CSV naming using template if available
+        if self.csv_pattern_template:
+            try:
+                csv_pattern = self.csv_pattern_template.replace('*', '')
+                if not actual_stock_code:
+                    raise ValueError("Stock code is required but was not provided")
+                    
+                csv_filename = csv_pattern.format(
+                    trade_mode=actual_product_type,
+                    trade_type=actual_exchange_code,
+                    stock=actual_stock_code.strip(),  # Ensure no whitespace
+                    interval=api_interval
+                )
+                
+                # Verify the filename contains the stock code
+                if actual_stock_code not in csv_filename:
+                    raise ValueError(f"Generated filename missing stock code: {csv_filename}")
+            except Exception as e:
+                print(f"[WARNING] CSV pattern template error: {e}. Using default pattern.")
+                csv_filename = f"historical_{actual_product_type}_{actual_exchange_code}_{actual_stock_code}_{api_interval}.csv"
+        else:
+            csv_filename = f"historical_{actual_product_type}_{actual_exchange_code}_{actual_stock_code}_{api_interval}.csv"
         csv_path = os.path.join(self.csv_folder, csv_filename)
         
         # Try to fetch from cache first if enabled
@@ -324,22 +338,31 @@ class DataHandler:
         # Construct CSV filename based on ISEC stock code if available, else original
         # This assumes CSVs might be named with ISEC codes or original codes.
         # Adjust logic if CSV naming convention is strictly one or the other.
-        base_stock_code = getattr(self, 'isec_stock_code', self.stock_code) 
+        # Get stock code, ensure it's not None/empty
+        base_stock_code = getattr(self, 'isec_stock_code', self.stock_code)
+        if not base_stock_code:
+            raise ValueError("Stock code is required but was not provided")
+            
+        # Unify CSV naming: always use template if available, else fallback to default
         if self.csv_pattern_template:
             try:
-                # Try to format with the keys defined in the template
-                csv_filename = self.csv_pattern_template.format(
-                    trade_mode=self.product_type,  # Map to expected keys in template
+                # Remove any '*' or wildcards from template (not valid for output files)
+                csv_pattern = self.csv_pattern_template.replace('*', '')
+                # Fill all placeholders with validated values
+                csv_filename = csv_pattern.format(
+                    trade_mode=self.product_type,
                     trade_type=self.exchange_code,
-                    stock=base_stock_code,
-                    interval=self.interval.replace('minute', 'min')
+                    stock=base_stock_code.strip(),  # Ensure no whitespace
+                    interval=self.interval
                 )
-            except KeyError as e:
-                # Fallback to default pattern if format fails
+                # Verify the filename contains the stock code
+                if base_stock_code not in csv_filename:
+                    raise ValueError(f"Generated filename missing stock code: {csv_filename}")
+            except Exception as e:
                 print(f"[WARNING] CSV pattern template error: {e}. Using default pattern.")
-                csv_filename = f"{self.product_type}_{self.exchange_code}_{base_stock_code}_{self.interval.replace('minute', 'min')}.csv"
+                csv_filename = f"historical_{self.product_type}_{self.exchange_code}_{base_stock_code}_{self.interval}.csv"
         else:
-            csv_filename = f"{self.product_type}_{self.exchange_code}_{base_stock_code}_{self.interval.replace('minute', 'min')}.csv"
+            csv_filename = f"historical_{self.product_type}_{self.exchange_code}_{base_stock_code}_{self.interval}.csv"
         
         csv_path = os.path.join(self.csv_folder, csv_filename)
 

@@ -5,30 +5,57 @@ from breeze_connect import BreezeConnect
 
 # Read config from properties file
 config = configparser.ConfigParser(interpolation=None)
-config_path = os.path.join(os.path.dirname(__file__), 'config.properties')
+# Use absolute path to ensure config is found
+config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.properties')
+print(f"Reading config from: {config_path}")
 config.read(config_path)
-get_config = lambda key: config['DEFAULT'].get(key) if 'DEFAULT' in config else config.get(key)
+
+# Define a safer config getter that checks if section exists
+def get_config(key, section='OPTIONS', fallback_section='DEFAULT', default=None):
+    # Try the primary section first
+    if section in config and key in config[section]:
+        return config[section][key]
+    # Try the fallback section next
+    elif fallback_section in config and key in config[fallback_section]:
+        return config[fallback_section][key]
+    # Return default if key not found in any section
+    return default
 
 # Read all option order parameters from config
 api_key = get_config('app_key')
 api_secret = get_config('secret_key')
 api_session = get_config('session_token')
 
-stock = get_config('option_stock_code')
-strike = get_config('option_strike')
-expiry = get_config('option_expiry')
-right = get_config('option_right')
-quantity = get_config('option_quantity')
-exchange_code = get_config('option_exchange_code')
-product = get_config('option_product')
+# Print all available keys in OPTIONS section for debugging
+print("Available keys in OPTIONS section:")
+if 'OPTIONS' in config:
+    for key in config['OPTIONS']:
+        print(f"  - {key} = {config['OPTIONS'][key]}")
+else:
+    print("  No OPTIONS section found!")
+
+# Use the keys as they appear in your config file
+stock = get_config('stock_code')
+strike = get_config('strike_price')
+expiry = get_config('expiry_date')
+right = get_config('right')
+quantity = get_config('quantity')
+exchange_code = get_config('exchange_code')
+product = get_config('product_type')
 action = get_config('option_action')
 order_type = get_config('option_order_type')
 validity = get_config('option_validity')
 disclosed_quantity = get_config('option_disclosed_quantity')
 
+# Debug print to verify values
+print(f"Using stock_code: {stock}")
+print(f"Using strike_price: {strike}")
+print(f"Using exchange_code: {exchange_code}")
+
 # Setup my API keys 
 api = BreezeConnect(api_key=api_key)
 api.generate_session(api_secret=api_secret, session_token=api_session)
+api.get_funds
 
 today = datetime.today().strftime('%Y-%m-%d')
 

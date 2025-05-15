@@ -11,9 +11,7 @@ RISK_PER_TRADE = 0.01  # 1% of portfolio per trade
 MAX_POSITIONS = 3
 
 # Timeframe configuration
-HIGHER_TIMEFRAME = "1day"    # Trend identification timeframe
-MIDDLE_TIMEFRAME = "4hour"   # Entry signal timeframe
-LOWER_TIMEFRAME = "1hour"    # Execution timeframe
+# (Now read from config file per market section: [OPTIONS], [FUTURES], [CASH])
 DAYS_BACK = 30               # Number of days to look back for backtesting
 
 # Higher timeframe parameters - trend identification
@@ -57,33 +55,26 @@ PRICE_ACTION_LOOKBACK = 3  # Lookback period for price action patterns
 
 def load_config(config_file='config.properties', section=None):
     """
-    Load configuration from a properties file
-    
+    Load configuration from a properties file, reading all timeframes from the specified section ([OPTIONS], [FUTURES], [CASH]).
     Args:
         config_file: Path to the configuration file
         section: Section name to load (None for DEFAULT)
-        
     Returns:
-        Dictionary with configuration values
+        Dictionary with configuration values for the section, including higher_timeframe, middle_timeframe, lower_timeframe.
     """
     config = configparser.RawConfigParser(interpolation=None)
-    
     # Find config file path
     script_dir = os.path.dirname(os.path.abspath(__file__))
     config_path = os.path.join(script_dir, config_file)
-    
     if not os.path.exists(config_path):
         print(f"[ERROR] Configuration file not found: {config_path}")
         return {}
-    
     config.read(config_path)
-    
     # Get correct section
     if section and section in config.sections():
         section_to_use = section
     else:
         section_to_use = 'DEFAULT'
-    
     # Convert config values to appropriate types
     config_dict = {}
     for key, value in config[section_to_use].items():
@@ -98,7 +89,6 @@ def load_config(config_file='config.properties', section=None):
             except ValueError:
                 print(f"[WARN] Could not convert {key}={value} to float, using default")
                 continue
-                
         elif key in ['ema_fast_period', 'ema_slow_period', 'rsi_period', 
                      'rsi_overbought', 'rsi_oversold', 'macd_fast', 'macd_slow', 
                      'macd_signal', 'atr_period', 'max_positions', 'days_back', 
@@ -110,9 +100,10 @@ def load_config(config_file='config.properties', section=None):
             except ValueError:
                 print(f"[WARN] Could not convert {key}={value} to integer, using default")
                 continue
-                
         else:
             # Keep as string, remove quotes
             config_dict[key] = value.strip('"\'')
-    
+    # Document: timeframes are now section-specific
+    # Example usage: cfg = load_config(section='FUTURES'); cfg['higher_timeframe']
     return config_dict
+

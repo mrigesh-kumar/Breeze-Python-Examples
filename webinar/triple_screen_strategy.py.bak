@@ -204,16 +204,8 @@ class TripleScreenStrategy(bt.Strategy):
             # If any index errors occur, we don't have enough data yet
             return False
         
-        # Classic Triple Screen Logic with Bollinger Band filter
-        # Avoid entering if price is above upper band (overbought)
-        bb_upper = self.bbands.lines.top[0]
-        bb_lower = self.bbands.lines.bot[0]
-        bb_middle = self.bbands.lines.mid[0]
-        not_overbought = price < bb_upper
-        # Optionally, allow entry if price is near lower band (potential value)
-        near_lower_band = price < (bb_lower + (bb_middle - bb_lower) * 0.25)
-        # Main entry: All classic conditions + not overbought
-        return (trend_bullish and price_above_ema and macd_bullish and rsi_bullish and atr_ok and not_overbought) or (trend_bullish and near_lower_band and macd_bullish and atr_ok)
+        # Classic Triple Screen Logic
+        return trend_bullish and price_above_ema and macd_bullish and rsi_bullish and atr_ok
     
     def should_sell(self):
         """Determine if we should sell based on strategy rules
@@ -240,21 +232,8 @@ class TripleScreenStrategy(bt.Strategy):
         price_below_ema = price < ema_val and self.data.volume[0] > self.data.volume[-1]  # Price below EMA with volume
         
         # Strict exit - any single condition can trigger exit
-        # Exit if price crosses below BB middle (mean reversion) or above upper band (overbought)
-        bb_upper = self.bbands.lines.top[0]
-        bb_middle = self.bbands.lines.mid[0]
-        bb_cross_below_middle = price < bb_middle
-        bb_above_upper = price > bb_upper
-        return trend_bearish or overbought or price_below_ema or bb_cross_below_middle or bb_above_upper
+        return trend_bearish or overbought or price_below_ema
     
-    def get_available_funds(self):
-        """Return available funds for trading. Uses broker cash for backtest mode."""
-        # For backtesting, use broker cash
-        if hasattr(self, 'broker') and hasattr(self.broker, 'get_cash'):
-            return self.broker.get_cash()
-        # Fallback: assume infinite funds (should not happen in backtest)
-        return float('inf')
-
     def create_position_object(self, size, price, is_long=True):
         """Create a simple position tracking object"""
         return {
@@ -368,23 +347,17 @@ class TripleScreenStrategy(bt.Strategy):
                 self.signals_processed += 1
                 # Only log if trade is actually executed
                 if self.position_count < self.p.max_positions:
-                    # Funds check before buy
-                    trade_size = 100
-                    trade_price = self.data.close[0]
-                    total_cost = trade_size * trade_price
-                    available_funds = self.get_available_funds()
-                    if available_funds >= total_cost:
-                        order = self.buy(size=trade_size, exectype=bt.Order.Market, transmit=True)
-                        # Create position tracking entry with unique key
-                        pos_key = f"pos_{self.position_count}"
-                        entry_price = trade_price
-                        self.pos_tracker[pos_key] = self.create_position_object(trade_size, entry_price, True)
-                        self.position_count += 1
-                        self.trades_executed += 1  # Increment executed trades counter
-                        self.signals_executed += 1  # Count executed signals
-                    else:
-                        self.log(f"[WARN] Insufficient funds: Needed {total_cost:.2f}, Available {available_funds:.2f}. Trade skipped.")
-
+                    # Execute the trade
+                    order = self.buy(size=100, exectype=bt.Order.Market, transmit=True)
+                    # Create position tracking entry with unique key
+                    pos_key = f"pos_{self.position_count}"
+                    entry_price = self.data.close[0]
+                    self.pos_tracker[pos_key] = self.create_position_object(100, entry_price, True)
+                    self.position_count += 1
+                    self.trades_executed += 1  # Increment executed trades counter
+                    self.signals_executed += 1  # Count executed signals
+                    # Store the order reference and entry price for later P&L calculation
+                    self.order_dict[order.ref] = entry_price
                     # self.log(f"BUY EXECUTED: Price={entry_price:.2f}, Size=100, Key={pos_key}, OrderRef={order.ref}")
                 else:
                     self.signals_ignored += 1  # Count ignored signals
@@ -552,18 +525,6 @@ class TripleScreenStrategy(bt.Strategy):
             'breakeven_rate': (self.trades_breakeven / max(1, self.trades_executed)) * 100
         }
 
-        # Print timeframe used for this run
-        try:
-            tf_map = {
-                0: 'Ticks', 1: 'Seconds', 2: 'Minutes', 3: 'Days', 4: 'Weeks', 5: 'Months'
-            }
-            tf_num = getattr(self.datas[0], '_timeframe', None)
-            if tf_num is None:
-                tf_num = getattr(self.datas[0], 'timeframe', None)
-            tf_str = tf_map.get(tf_num, str(tf_num)) if tf_num is not None else 'Unknown'
-            self.log(f"Timeframe applied for the trade: {tf_str}")
-        except Exception as ex:
-            self.log(f"Timeframe applied for the trade: Unknown (Error: {ex})")
         # Print detailed trade summary
         self.log("------- Individual Trade Results -------")
         for idx, t in enumerate(self.trades, 1):

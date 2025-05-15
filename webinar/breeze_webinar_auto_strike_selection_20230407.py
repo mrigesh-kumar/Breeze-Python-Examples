@@ -7,7 +7,7 @@ import os
 from breeze_connect import BreezeConnect
 
 flt_rf = 0.058
-int_days_to_expiry = (datetime.datetime(2023,4,27, 0, 0, 0) - datetime.datetime.today()).days
+int_days_to_expiry = (datetime.datetime(2025,5,29, 0, 0, 0) - datetime.datetime.today()).days
 
 # Read config
 config = configparser.RawConfigParser()
@@ -94,7 +94,7 @@ dict_fut_quote = app.get_quotes(
     stock_code='CNXBAN',
     exchange_code='NFO',
     product_type='futures',
-    expiry_date=datetime.date(2023,4,27).strftime(r'%d-%b-%Y')
+    expiry_date=datetime.date(2025,5,15).strftime(r'%d-%b-%Y')
     )['Success'][0]
 
 #!STRIKE SELECTION BY ABSOLUTE COUNT AWAY FROM ATM

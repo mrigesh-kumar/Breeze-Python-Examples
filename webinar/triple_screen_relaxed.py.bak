@@ -18,14 +18,6 @@ class DonchianChannels(bt.Indicator):
         self.lines.middle = (self.lines.upper + self.lines.lower) / 2
 
 class RelaxedTripleScreenStrategy(TripleScreenStrategy):
-    def get_available_funds(self):
-        """Return available funds for trading. Uses broker cash for backtest mode."""
-        # For backtesting, use broker cash
-        if hasattr(self, 'broker') and hasattr(self.broker, 'get_cash'):
-            return self.broker.get_cash()
-        # Fallback: assume infinite funds (should not happen in backtest)
-        return float('inf')
-
     """
     Relaxed version of the Triple Screen Trading Strategy with more flexible entry conditions:
     1. Relaxed pattern requirement - doesn't strictly require candlestick patterns
@@ -96,25 +88,20 @@ class RelaxedTripleScreenStrategy(TripleScreenStrategy):
                 
                 # Check if we should execute this trade
                 if self.position_count < self.p.max_positions:
-                    # Funds check before buy
-                    trade_size = 100
-                    trade_price = self.data.close[0]
-                    total_cost = trade_size * trade_price
-                    available_funds = self.get_available_funds()
-                    if available_funds >= total_cost:
-                        order = self.buy(size=trade_size, exectype=bt.Order.Market, transmit=True)
-                        # Create position tracking entry with unique key
-                        pos_key = f"pos_{self.position_count}"
-                        entry_price = trade_price
-                        self.pos_tracker[pos_key] = self.create_position_object(trade_size, entry_price, True)
-                        self.position_count += 1
-                        self.trades_executed += 1  # Increment executed trades counter
-                        self.signals_executed += 1  # Count executed signals
-                        # Store the order reference and entry price for later P&L calculation
-                        self.order_dict[order.ref] = entry_price
-                        self.log(f"BUY EXECUTED: Price={entry_price:.2f}, Size={trade_size}, Key={pos_key}, OrderRef={order.ref}")
-                    else:
-                        self.log(f"[WARN] Insufficient funds: Needed {total_cost:.2f}, Available {available_funds:.2f}. Trade skipped.")
+                    # Execute the trade
+                    order = self.buy(size=100, exectype=bt.Order.Market, transmit=True)
+                    # Create position tracking entry with unique key
+                    pos_key = f"pos_{self.position_count}"
+                    entry_price = self.data.close[0]
+                    self.pos_tracker[pos_key] = self.create_position_object(100, entry_price, True)
+                    self.position_count += 1
+                    self.trades_executed += 1  # Increment executed trades counter
+                    self.signals_executed += 1  # Count executed signals
+                    
+                    # Store the order reference and entry price for later P&L calculation
+                    self.order_dict[order.ref] = entry_price
+                    
+                    self.log(f"BUY EXECUTED: Price={entry_price:.2f}, Size=100, Key={pos_key}, OrderRef={order.ref}")
                 else:
                     self.signals_ignored += 1  # Count ignored signals
                     self.log(f"SIGNAL IGNORED: max positions reached")
@@ -173,21 +160,14 @@ class RelaxedTripleScreenStrategy(TripleScreenStrategy):
                 breakout_condition
             ])
             
-            # Bollinger Band filter
-            bb_upper = self.bbands.lines.top[0]
-            bb_lower = self.bbands.lines.bot[0]
-            bb_middle = self.bbands.lines.mid[0]
-            not_overbought = self.data.close[0] < bb_upper
-            near_lower_band = self.data.close[0] < (bb_lower + (bb_middle - bb_lower) * 0.25)
-
-            # Main entry signal - more lenient (needs 3/6 instead of 4/6) + BB filter
-            entry_signal = trend_bullish and confirmations >= 3 and not_overbought
+            # Main entry signal - more lenient (needs 3/6 instead of 4/6)
+            entry_signal = trend_bullish and confirmations >= 3
             
-            # More aggressive entry - we'll also buy on strong breakouts or near lower band
-            aggressive_entry = (
-                (trend_bullish and self.data.close[0] > self.dc.lines.upper[0] and self.data.volume[0] > self.volume_sma[0] * 1.5)
-                or (trend_bullish and near_lower_band and macd_condition)
-            )
+            # More aggressive entry - we'll also buy on strong breakouts even with fewer confirmations
+            aggressive_entry = (trend_bullish and 
+                               self.data.close[0] > self.dc.lines.upper[0] and 
+                               self.data.volume[0] > self.volume_sma[0] * 1.5)
+                               
             return entry_signal or aggressive_entry
             
         except IndexError:

@@ -127,10 +127,9 @@ class TripleScreenStrategy(bt.Strategy):
         # Check if the data has a confirmed_signal attribute
         if hasattr(self.datas[0].lines, 'confirmed_signal'):
             self.use_signal_line = True
-            # self.log("Using confirmed_signal from data feed")
+            self.log("Using confirmed_signal from data feed")
         else:
-            # self.log("No confirmed_signal in data, using strategy's own signals")
-            pass
+            self.log("No confirmed_signal in data, using strategy's own signals")
         
         # Initialize indicators
         self.atr = bt.indicators.ATR(self.data, period=self.p.atr_period)
@@ -138,8 +137,6 @@ class TripleScreenStrategy(bt.Strategy):
         self.ema = bt.indicators.EMA(self.data, period=20)
         self.macd = bt.indicators.MACD(self.data)
         self.macd_hist = self.macd.macd - self.macd.signal
-        # Bollinger Bands
-        self.bbands = bt.indicators.BollingerBands(self.data.close, period=20, devfactor=2)
         
         # Determine stock-specific parameters
         self.stock_code = self.datas[0].stock_code if hasattr(self.datas[0], 'stock_code') else None
@@ -150,20 +147,20 @@ class TripleScreenStrategy(bt.Strategy):
             stock_param_name = f"{self.stock_code.lower()}_trail_atr_mult"
             if hasattr(self.p, stock_param_name):
                 self.effective_trail_atr_mult = getattr(self.p, stock_param_name)
-                # self.log(f"Using stock-specific ATR multiplier for {self.stock_code}: {self.effective_trail_atr_mult}")
+                self.log(f"Using stock-specific ATR multiplier for {self.stock_code}: {self.effective_trail_atr_mult}")
             else:
                 self.effective_trail_atr_mult = self.p.trail_atr_mult
         else:
             self.effective_trail_atr_mult = self.p.trail_atr_mult
             
         # Logging
-        # self.log(f"Strategy initialized with {self.p.max_positions} max positions and ATR trailing stop multiplier: {self.effective_trail_atr_mult}")
+        self.log(f"Strategy initialized with {self.p.max_positions} max positions and ATR trailing stop multiplier: {self.effective_trail_atr_mult}")
         
     def log(self, txt, dt=None):
         """Enhanced logging function with more detail"""
         dt = dt or self.datas[0].datetime.datetime(0)
         log_text = f'{dt.isoformat()}: {txt}'
-        # print(f'[BT] {log_text}')
+        print(f'[BT] {log_text}')
         
     def should_buy(self):
         """Determine if we should buy based on strategy rules
@@ -204,16 +201,8 @@ class TripleScreenStrategy(bt.Strategy):
             # If any index errors occur, we don't have enough data yet
             return False
         
-        # Classic Triple Screen Logic with Bollinger Band filter
-        # Avoid entering if price is above upper band (overbought)
-        bb_upper = self.bbands.lines.top[0]
-        bb_lower = self.bbands.lines.bot[0]
-        bb_middle = self.bbands.lines.mid[0]
-        not_overbought = price < bb_upper
-        # Optionally, allow entry if price is near lower band (potential value)
-        near_lower_band = price < (bb_lower + (bb_middle - bb_lower) * 0.25)
-        # Main entry: All classic conditions + not overbought
-        return (trend_bullish and price_above_ema and macd_bullish and rsi_bullish and atr_ok and not_overbought) or (trend_bullish and near_lower_band and macd_bullish and atr_ok)
+        # Classic Triple Screen Logic
+        return trend_bullish and price_above_ema and macd_bullish and rsi_bullish and atr_ok
     
     def should_sell(self):
         """Determine if we should sell based on strategy rules
@@ -240,21 +229,8 @@ class TripleScreenStrategy(bt.Strategy):
         price_below_ema = price < ema_val and self.data.volume[0] > self.data.volume[-1]  # Price below EMA with volume
         
         # Strict exit - any single condition can trigger exit
-        # Exit if price crosses below BB middle (mean reversion) or above upper band (overbought)
-        bb_upper = self.bbands.lines.top[0]
-        bb_middle = self.bbands.lines.mid[0]
-        bb_cross_below_middle = price < bb_middle
-        bb_above_upper = price > bb_upper
-        return trend_bearish or overbought or price_below_ema or bb_cross_below_middle or bb_above_upper
+        return trend_bearish or overbought or price_below_ema
     
-    def get_available_funds(self):
-        """Return available funds for trading. Uses broker cash for backtest mode."""
-        # For backtesting, use broker cash
-        if hasattr(self, 'broker') and hasattr(self.broker, 'get_cash'):
-            return self.broker.get_cash()
-        # Fallback: assume infinite funds (should not happen in backtest)
-        return float('inf')
-
     def create_position_object(self, size, price, is_long=True):
         """Create a simple position tracking object"""
         return {
@@ -296,7 +272,7 @@ class TripleScreenStrategy(bt.Strategy):
                         self.cancel(stop_order)
                         new_stop_order = self.sell(size=position.size, exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
                         self.stop_orders[pos_key] = new_stop_order
-                        # self.log(f"Trailing stop updated for position {pos_key}: {new_stop:.2f} (ATR: {self.atr[0]:.2f}, Profit: {profit_pct:.1f}%)")
+                        self.log(f"Trailing stop updated for position {pos_key}: {new_stop:.2f} (ATR: {self.atr[0]:.2f}, Profit: {profit_pct:.1f}%)")
             else:
                 # Original trailing stop logic (percentage-based)
                 new_stop = position.price * (1.0 - self.p.trailing_pct / 100.0)
@@ -304,7 +280,7 @@ class TripleScreenStrategy(bt.Strategy):
                     self.cancel(stop_order)
                     new_stop_order = self.sell(size=position.size, exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
                     self.stop_orders[pos_key] = new_stop_order
-                    # self.log(f"Trailing stop updated for position {pos_key}: {new_stop:.2f} (percentage-based)")
+                    self.log(f"Trailing stop updated for position {pos_key}: {new_stop:.2f} (percentage-based)")
         else:  # Short position
             # Use ATR-based trailing stop if enabled
             if self.effective_trail_atr_mult > 0:
@@ -326,7 +302,7 @@ class TripleScreenStrategy(bt.Strategy):
                         self.cancel(stop_order)
                         new_stop_order = self.buy(size=abs(position.size), exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
                         self.stop_orders[pos_key] = new_stop_order
-                        # self.log(f"Trailing stop updated for short position {pos_key}: {new_stop:.2f} (ATR: {self.atr[0]:.2f}, Profit: {profit_pct:.1f}%)")
+                        self.log(f"Trailing stop updated for short position {pos_key}: {new_stop:.2f} (ATR: {self.atr[0]:.2f}, Profit: {profit_pct:.1f}%)")
             else:
                 # Original trailing stop logic for shorts
                 new_stop = position.price * (1.0 + self.p.trailing_pct / 100.0)
@@ -334,7 +310,7 @@ class TripleScreenStrategy(bt.Strategy):
                     self.cancel(stop_order)
                     new_stop_order = self.buy(size=abs(position.size), exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
                     self.stop_orders[pos_key] = new_stop_order
-                    # self.log(f"Trailing stop updated for short position {pos_key}: {new_stop:.2f} (percentage-based)")
+                    self.log(f"Trailing stop updated for short position {pos_key}: {new_stop:.2f} (percentage-based)")
     
     def next(self):
         """Called for each bar - main strategy logic"""
@@ -368,24 +344,18 @@ class TripleScreenStrategy(bt.Strategy):
                 self.signals_processed += 1
                 # Only log if trade is actually executed
                 if self.position_count < self.p.max_positions:
-                    # Funds check before buy
-                    trade_size = 100
-                    trade_price = self.data.close[0]
-                    total_cost = trade_size * trade_price
-                    available_funds = self.get_available_funds()
-                    if available_funds >= total_cost:
-                        order = self.buy(size=trade_size, exectype=bt.Order.Market, transmit=True)
-                        # Create position tracking entry with unique key
-                        pos_key = f"pos_{self.position_count}"
-                        entry_price = trade_price
-                        self.pos_tracker[pos_key] = self.create_position_object(trade_size, entry_price, True)
-                        self.position_count += 1
-                        self.trades_executed += 1  # Increment executed trades counter
-                        self.signals_executed += 1  # Count executed signals
-                    else:
-                        self.log(f"[WARN] Insufficient funds: Needed {total_cost:.2f}, Available {available_funds:.2f}. Trade skipped.")
-
-                    # self.log(f"BUY EXECUTED: Price={entry_price:.2f}, Size=100, Key={pos_key}, OrderRef={order.ref}")
+                    # Execute the trade
+                    order = self.buy(size=100, exectype=bt.Order.Market, transmit=True)
+                    # Create position tracking entry with unique key
+                    pos_key = f"pos_{self.position_count}"
+                    entry_price = self.data.close[0]
+                    self.pos_tracker[pos_key] = self.create_position_object(100, entry_price, True)
+                    self.position_count += 1
+                    self.trades_executed += 1  # Increment executed trades counter
+                    self.signals_executed += 1  # Count executed signals
+                    # Store the order reference and entry price for later P&L calculation
+                    self.order_dict[order.ref] = entry_price
+                    self.log(f"BUY EXECUTED: Price={entry_price:.2f}, Size=100, Key={pos_key}, OrderRef={order.ref}")
                 else:
                     self.signals_ignored += 1  # Count ignored signals
                     # Do not log ignored signals to reduce log clutter
@@ -403,15 +373,13 @@ class TripleScreenStrategy(bt.Strategy):
         elif order.status == order.Margin: order_status = 'Margin'
         elif order.status == order.Rejected: order_status = 'Rejected'
     
-        # self.log(f'ORDER {order.ref} {order_status}: Type: {"BUY" if order.isbuy() else "SELL"}')
+        self.log(f'ORDER {order.ref} {order_status}: Type: {"BUY" if order.isbuy() else "SELL"}')
         
         if order.status == order.Completed:
             if order.isbuy():
-                # self.log(f'BUY EXECUTED: Price: {order.executed.price:.2f}, Size: {order.executed.size}, Cost: {order.executed.value:.2f}')
-                pass
+                self.log(f'BUY EXECUTED: Price: {order.executed.price:.2f}, Size: {order.executed.size}, Cost: {order.executed.value:.2f}')
             else:  # Sell
-                # self.log(f'SELL EXECUTED: Price: {order.executed.price:.2f}, Size: {order.executed.size}, Cost: {order.executed.value:.2f}')
-                pass
+                self.log(f'SELL EXECUTED: Price: {order.executed.price:.2f}, Size: {order.executed.size}, Cost: {order.executed.value:.2f}')
                 
                 # Track profit/loss for sell orders if we have the entry price
                 if hasattr(order, 'executed') and order.ref in self.order_dict:
@@ -420,15 +388,17 @@ class TripleScreenStrategy(bt.Strategy):
                     size = order.executed.size
                     pnl = (exit_price - entry_price) * size
                     
-                    # self.log(f'REALIZED P&L: Entry: {entry_price:.2f}, Exit: {exit_price:.2f}, P&L: {pnl:.2f}')
+                    self.log(f'REALIZED P&L: Entry: {entry_price:.2f}, Exit: {exit_price:.2f}, P&L: {pnl:.2f}')
                     
                     # Update win/loss counters manually
                     if pnl > 0:
                         self.trades_won += 1
                         self.total_profit += pnl
+                        self.log(f'WINNING TRADE: +{pnl:.2f}')
                     else:
                         self.trades_lost += 1
                         self.total_loss += abs(pnl)
+                        self.log(f'LOSING TRADE: {pnl:.2f}')
                         
                     # Update trade stats so they're available to the main script
                     self.trade_stats = {
@@ -441,76 +411,97 @@ class TripleScreenStrategy(bt.Strategy):
                     }
                     
         elif order.status in [order.Canceled, order.Margin, order.Rejected, order.Expired]:
-            # self.log(f'Order {order_status}: {order.ref}')
-            pass
+            self.log(f'Order {order_status}: {order.ref}')
 
     def notify_trade(self, trade):
         """Called when a trade is completed"""
-        if not trade.isclosed:
-            return
-
-        # Extract entry and exit from trade.history
-        entry_price, exit_price, entry_size = None, None, None
-        if hasattr(trade, "history") and trade.history:
-            for event, order, size, price, comm, dt in trade.history:
-                if event == 0:  # 0 = entry event
-                    entry_price = price
-                    entry_size = size
-                elif event == 1:  # 1 = exit event
-                    exit_price = price
-
-        # Defensive: Only log if all values are valid
-        if entry_price is not None and exit_price is not None and entry_size:
-            pnl = trade.pnlcomm if hasattr(trade, 'pnlcomm') else trade.pnl
-            # self.log(f"Order {len(self.trades)+1}:")
-            # self.log(f"Entry: {entry_price:.2f}, Exit: {exit_price:.2f}, Size: {entry_size}, P&L: {pnl:.2f}")
-            # self.log('-' * 60)
-            # Store trade data for summary
-            self.trades.append({
+        # Gather all debug lines for this trade
+        debug_lines = []
+        debug_lines.append(f"[TRADE DEBUG] Trade status: {'Open' if trade.isopen else 'Closed'}, Size: {trade.size}")
+        if trade.isclosed:
+            entry_price = trade.price
+            exit_price = None
+            if hasattr(trade, "history") and trade.history:
+                for event, order, size, price, comm, dt in reversed(trade.history):
+                    if event == 1:  # 1 = exit event
+                        exit_price = price
+                        break
+            if exit_price is not None:
+                debug_lines.append(f"[TRADE DEBUG] Entry price: {entry_price:.2f}, Exit price: {exit_price:.2f}")
+            else:
+                debug_lines.append(f"[TRADE DEBUG] Entry price: {entry_price:.2f}, Exit price: N/A")
+        else:
+            debug_lines.append(f"[TRADE DEBUG] Entry price: {trade.price:.2f} (trade still open)")
+        debug_lines.append(f"[TRADE DEBUG] PnL (gross): {trade.pnl:.2f}, PnL (net): {trade.pnlcomm:.2f}")
+        
+        if trade.isclosed:
+            entry_price = trade.price
+            exit_price = None
+            if hasattr(trade, "history") and trade.history:
+                for event, order, size, price, comm, dt in reversed(trade.history):
+                    if event == 1:
+                        exit_price = price
+                        break
+            if exit_price is not None:
+                trade_size = trade.size
+                calculated_pnl = (exit_price - entry_price) * trade_size
+            else:
+                exit_price = 0
+                trade_size = trade.size
+                calculated_pnl = 0
+            profit = trade.pnlcomm
+            debug_lines.append(f"[TRADE CLOSED] PnL (with commission)={profit:.2f}, Size={trade_size}")
+            debug_lines.append(f"[TRADE CLOSED] Entry price: {entry_price:.2f}, Exit price: {exit_price:.2f}")
+            debug_lines.append(f"[TRADE CLOSED] Calculated P&L: {calculated_pnl:.2f}, Backtrader P&L: {trade.pnl:.2f}")
+            # Store trade details in a list for reference
+            trade_data = {
                 'entry_price': entry_price,
                 'exit_price': exit_price,
-                'size': entry_size,
-                'pnl': pnl,
+                'size': trade_size,
+                'pnl': profit,
                 'entry_date': self.datetime.date().isoformat(),
                 'exit_date': self.datetime.date().isoformat()
-            })
-        else:
-            # self.log(f"[WARN] Skipped trade log due to missing entry/exit/size.")
-            pass
-
-        # Update stats as before
-        profit = trade.pnlcomm if hasattr(trade, 'pnlcomm') else trade.pnl
-        if profit > 0:
-            self.trades_won += 1
-            self.total_profit += profit
-        else:
-            self.trades_lost += 1
-            self.total_loss += abs(profit)
-        self.trade_stats = {
-            'total': len(self.trades),
-            'wins': self.trades_won,
-            'losses': self.trades_lost,
-            'total_profit': self.total_profit,
-            'total_loss': self.total_loss,
-            'win_rate': (self.trades_won / max(1, len(self.trades))) * 100
-        }
-
+            }
+            self.trades.append(trade_data)
+            if profit > 0:
+                self.trades_won += 1
+                self.total_profit += profit
+                debug_lines.append(f"[WINNING TRADE] {profit:.2f}")
+            else:
+                self.trades_lost += 1
+                self.total_loss += abs(profit)
+                debug_lines.append(f"[LOSING TRADE] {profit:.2f}")
+            self.trade_stats = {
+                'total': self.trades_executed,
+                'wins': self.trades_won,
+                'losses': self.trades_lost,
+                'total_profit': self.total_profit,
+                'total_loss': self.total_loss,
+                'win_rate': (self.trades_won / max(1, self.trades_executed)) * 100
+            }
+        # Print all debug lines for this trade together, then separator
+        # Show order number in debug logs (based on number of trades closed so far + 1)
+        order_number = len(self.trades) + 1
+        self.log(f"Order {order_number}:")
+        for line in debug_lines:
+            self.log(line)
+        self.log('-' * 60)
 
     def stop(self):
         """Enhanced end-of-backtest reporting"""
         # Force close any open positions at the end of the backtest
         if len(self.pos_tracker) > 0:
-            # self.log("Closing remaining open positions at end of backtest")
+            self.log("Closing remaining open positions at end of backtest")
             for pos_key in list(self.pos_tracker.keys()):
                 if pos_key in self.pos_tracker:  # Check again as the list might change during iteration
-                    # self.log(f"Forcing close of position {pos_key}")
+                    self.log(f"Forcing close of position {pos_key}")
                     self.close()
         
         self.log(f"Net profit: {self.total_profit - self.total_loss:.2f}")
 
         # Manually account for any position still open that Backtrader did not mark as closed
         if len(self.pos_tracker) > 0:
-            # self.log(f"[WARN] Some positions remained open after force close – accounting for P&L manually. pos_tracker: {self.pos_tracker}")
+            self.log(f"[WARN] Some positions remained open after force close – accounting for P&L manually. pos_tracker: {self.pos_tracker}")
             for pos_key, pos in list(self.pos_tracker.items()):
                 current_price = self.data.close[0]
                 # Support both dict and object for pos
@@ -552,18 +543,6 @@ class TripleScreenStrategy(bt.Strategy):
             'breakeven_rate': (self.trades_breakeven / max(1, self.trades_executed)) * 100
         }
 
-        # Print timeframe used for this run
-        try:
-            tf_map = {
-                0: 'Ticks', 1: 'Seconds', 2: 'Minutes', 3: 'Days', 4: 'Weeks', 5: 'Months'
-            }
-            tf_num = getattr(self.datas[0], '_timeframe', None)
-            if tf_num is None:
-                tf_num = getattr(self.datas[0], 'timeframe', None)
-            tf_str = tf_map.get(tf_num, str(tf_num)) if tf_num is not None else 'Unknown'
-            self.log(f"Timeframe applied for the trade: {tf_str}")
-        except Exception as ex:
-            self.log(f"Timeframe applied for the trade: Unknown (Error: {ex})")
         # Print detailed trade summary
         self.log("------- Individual Trade Results -------")
         for idx, t in enumerate(self.trades, 1):
@@ -581,7 +560,7 @@ class TripleScreenStrategy(bt.Strategy):
                     f"Entry: {entry:.2f}, Exit: N/A, Size: {size}, P&L: {pnl:.2f}"
                 )
             self.log(trade_summary)
-            # self.log('-' * 60)
+            self.log('-' * 60)
 
         # Report on signals
         self.log(f"Total signals detected: {self.signals_processed}")
