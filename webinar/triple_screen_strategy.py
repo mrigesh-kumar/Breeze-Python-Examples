@@ -101,7 +101,7 @@ class TripleScreenStrategy(bt.Strategy):
         # Always initialize trade_stats so it exists on the instance
         self.trade_stats = {}
         # Initialize variables for trade tracking
-        self.trades_executed = 0
+        self.trades_executed = 0  # Will be recalculated in stop()
         self.trades_won = 0
         self.trades_lost = 0
         self.trades_breakeven = 0
@@ -456,6 +456,10 @@ class TripleScreenStrategy(bt.Strategy):
                         'win_rate': (self.trades_won / max(1, self.trades_won + self.trades_lost)) * 100
                     }
                     
+                    # Record exit reason based on P&L
+                    exit_reason = 'take_profit' if pnl > 0 else 'stop_loss'
+                    self.exit_reasons[exit_reason] = self.exit_reasons.get(exit_reason, 0) + 1
+
         elif order.status in [order.Canceled, order.Margin, order.Rejected, order.Expired]:
             # self.log(f'Order {order_status}: {order.ref}')
             pass
@@ -510,7 +514,6 @@ class TripleScreenStrategy(bt.Strategy):
             'total_loss': self.total_loss,
             'win_rate': (self.trades_won / max(1, len(self.trades))) * 100
         }
-
 
     def stop(self):
         # Reset balance for next backtest run
@@ -567,48 +570,28 @@ class TripleScreenStrategy(bt.Strategy):
         
         self.log(f"Net profit: {self.total_profit - self.total_loss:.2f}")
 
-        # Manually account for any position still open that Backtrader did not mark as closed
-        if len(self.pos_tracker) > 0:
-            # self.log(f"[WARN] Some positions remained open after force close – accounting for P&L manually. pos_tracker: {self.pos_tracker}")
-            for pos_key, pos in list(self.pos_tracker.items()):
-                current_price = self.data.close[0]
-                # Support both dict and object for pos
-                if isinstance(pos, dict):
-                    size = pos.get('size', 0)
-                    entry_price = pos.get('price', 0)
-                else:
-                    size = getattr(pos, 'size', 0)
-                    entry_price = getattr(pos, 'price', 0)
-                profit = (current_price - entry_price) * size
+        # No need to recreate forced-close trade records here; counters are already updated.
+        # self.trades list can still be used for charting if populate elsewhere.
 
-                # Update stats just like notify_trade would
-                self.trades_executed += 1
-                if profit > 0:
-                    self.trades_won += 1
-                    self.total_profit += profit
-                elif profit < 0:
-                    self.trades_lost += 1
-                    self.total_loss += abs(profit)
-                else:
-                    self.trades_breakeven += 1
+        # Recalculate aggregate trade statistics from tracked counters
+        total_trades = self.trades_executed
+        wins = self.trades_won
+        losses = self.trades_lost
+        breakevens = self.trades_breakeven
+        total_profit = self.total_profit
+        total_loss = self.total_loss
 
-            # After manual accounting, clear pos_tracker
-            self.pos_tracker.clear()
-
-            # Refresh win rate after manual adjustments
-            win_rate = (self.trades_won / max(1, self.trades_executed)) * 100
-
-        # Update trade_stats dict after manual P&L adjustments
         self.trade_stats = {
-            'total': self.trades_executed,
-            'wins': self.trades_won,
-            'losses': self.trades_lost,
-            'breakeven': self.trades_breakeven,
-            'total_profit': self.total_profit,
-            'total_loss': self.total_loss,
-            'win_rate': (self.trades_won / max(1, self.trades_executed)) * 100,
-            'loss_rate': (self.trades_lost / max(1, self.trades_executed)) * 100,
-            'breakeven_rate': (self.trades_breakeven / max(1, self.trades_executed)) * 100
+            'total': total_trades,
+            'wins': wins,
+            'losses': losses,
+            'breakeven': breakevens,
+            'total_profit': total_profit,
+            'total_loss': total_loss,
+            'win_rate': (wins / max(1, total_trades)) * 100,
+            'loss_rate': (losses / max(1, total_trades)) * 100,
+            'breakeven_rate': (breakevens / max(1, total_trades)) * 100,
+            'signals_detected': getattr(self, 'signals_processed', 0)
         }
 
         # Print timeframe used for this run
@@ -653,7 +636,7 @@ class TripleScreenStrategy(bt.Strategy):
             'losses': self.trades_lost,
             'total_profit': self.total_profit,
             'total_loss': self.total_loss,
-            'win_rate': win_rate,
+            'win_rate': (self.trades_won / max(1, self.trades_executed)) * 100,
             'signals_detected': self.signals_processed
         }
         # Report on exit reasons
