@@ -84,10 +84,16 @@ class TripleScreenStrategy(bt.Strategy):
         ('bel_trail_atr_mult', 1.8),  # BEL-specific ATR multiplier
         ('lici_trail_atr_mult', 1.0),  # LICI-specific ATR multiplier
         ('use_stock_specific_params', True),  # Whether to use stock-specific parameters
+        ('initial_capital', 10000.0),  # Initial capital for balance tracking
     )
     
     def __init__(self):
         super(TripleScreenStrategy, self).__init__()
+        
+        # Initialize balance tracking
+        self.initial_balance = float(self.params.initial_capital)
+        self.current_balance = self.initial_balance
+        self.balance_exhausted = False
         
         # Check for required parameter: max_positions
         if self.p.max_positions is None:
@@ -337,7 +343,17 @@ class TripleScreenStrategy(bt.Strategy):
                     # self.log(f"Trailing stop updated for short position {pos_key}: {new_stop:.2f} (percentage-based)")
     
     def next(self):
-        """Called for each bar - main strategy logic"""
+        # Skip processing if balance is exhausted
+        if self.balance_exhausted:
+            return
+            
+        # Check if current balance is positive before processing trades
+        self.current_balance = self.broker.getvalue()
+        if self.current_balance <= 0:
+            self.balance_exhausted = True
+            self.log('Balance exhausted, stopping further trades')
+            return
+            
         # Update existing positions
         for pos_key in list(self.pos_tracker.keys()):
             self.update_trailing_stop(pos_key)
@@ -497,14 +513,57 @@ class TripleScreenStrategy(bt.Strategy):
 
 
     def stop(self):
-        """Enhanced end-of-backtest reporting"""
+        # Reset balance for next backtest run
+        self.current_balance = self.initial_balance
+        self.balance_exhausted = False
+        
         # Force close any open positions at the end of the backtest
         if len(self.pos_tracker) > 0:
-            # self.log("Closing remaining open positions at end of backtest")
             for pos_key in list(self.pos_tracker.keys()):
-                if pos_key in self.pos_tracker:  # Check again as the list might change during iteration
-                    # self.log(f"Forcing close of position {pos_key}")
+                if pos_key in self.pos_tracker:
                     self.close()
+        
+        # Manually account for any position still open that Backtrader did not mark as closed
+        if len(self.pos_tracker) > 0:
+            for pos_key, pos in list(self.pos_tracker.items()):
+                current_price = self.data.close[0]
+                if isinstance(pos, dict):
+                    size = pos.get('size', 0)
+                    entry_price = pos.get('price', 0)
+                else:
+                    size = getattr(pos, 'size', 0)
+                    entry_price = getattr(pos, 'price', 0)
+                profit = (current_price - entry_price) * size
+
+                self.trades_executed += 1
+                if profit > 0:
+                    self.trades_won += 1
+                    self.total_profit += profit
+                elif profit < 0:
+                    self.trades_lost += 1
+                    self.total_loss += abs(profit)
+                else:
+                    self.trades_breakeven += 1
+
+            self.pos_tracker.clear()
+
+        # Calculate win rate with proper edge case handling
+        total_trades = getattr(self, 'trades_won', 0) + getattr(self, 'trades_lost', 0)
+        win_rate = (self.trades_won / max(1, total_trades)) * 100 if total_trades > 0 else 0.0
+
+        # Update trade_stats dict
+        self.trade_stats = {
+            'total': getattr(self, 'trades_executed', 0),
+            'wins': getattr(self, 'trades_won', 0),
+            'losses': getattr(self, 'trades_lost', 0),
+            'breakeven': getattr(self, 'trades_breakeven', 0),
+            'total_profit': getattr(self, 'total_profit', 0.0),
+            'total_loss': getattr(self, 'total_loss', 0.0),
+            'win_rate': win_rate,
+            'loss_rate': (self.trades_lost / max(1, total_trades)) * 100 if total_trades > 0 else 0.0,
+            'breakeven_rate': (self.trades_breakeven / max(1, total_trades)) * 100 if total_trades > 0 else 0.0,
+            'signals_detected': getattr(self, 'signals_processed', 0)
+        }
         
         self.log(f"Net profit: {self.total_profit - self.total_loss:.2f}")
 
