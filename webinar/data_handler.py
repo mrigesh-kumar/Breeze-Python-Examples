@@ -62,21 +62,44 @@ class DataHandler:
         
         market_section = 'CASH' if product_type == 'cash' else 'FUTURES'
         self.interval = config.get(market_section, 'interval')
-        self.from_date = datetime(*map(int, config.get(market_section, 'from_date').strip('"').split(', ')))
-        self.to_date = datetime(*map(int, config.get(market_section, 'to_date').strip('"').split(', ')))
+        
+        # Parse from_date and to_date as datetime objects
+        def parse_date(date_str):
+            date_str = date_str.strip('"')
+            if date_str.endswith('Z'):
+                date_str = date_str[:-1] + '+00:00'
+            return datetime.fromisoformat(date_str)
+
+        self.from_date = parse_date(config.get(market_section, 'from_date'))
+        self.to_date = parse_date(config.get(market_section, 'to_date'))
         self.csv_folder = config.get(market_section, 'csv_folder')
         # Read csv_pattern_template from config
         self.csv_pattern_template = config.get(market_section, 'csv_pattern_template', fallback=None)
 
+        # Keep expiry_date as string in dd-MMM-yyyy format
         if self.product_type in ['futures', 'options']:
-            expiry_date_str = config.get(market_section, 'expiry_date').strip('"')
-            self.expiry_date = datetime(*map(int, expiry_date_str.split(', ')))
+            self.expiry_date = config.get(market_section, 'expiry_date').strip('\"')
 
         # Validate instrument exists
         self.validate_stock_code()
+
+    @property
+    def from_date_iso(self):
+        return self.datetime_to_iso(self.from_date)
+
+    @property
+    def to_date_iso(self):
+        return self.datetime_to_iso(self.to_date)
+
+    @property
+    def expiry_date_iso(self):
+        return self.expiry_date if self.expiry_date else None
     
     def datetime_to_iso(self, dt):
         """Convert Python datetime to ISO format for Breeze API."""
+        if isinstance(dt, str):
+            # If already in string format, return as is
+            return dt
         return dt.strftime('%Y-%m-%dT%H:%M:%S') + '.000Z'
     
     def datetime_converter(self, dt_string):
@@ -271,14 +294,14 @@ class DataHandler:
                 print(f"  expiry_date=None, right=None")
             
             # Make the API call
-            hist_data = self.breeze_conn.get_historical_data(
+            hist_data = self.breeze_conn.get_historical_data_v2(
                 interval=api_interval,
-                from_date=self.datetime_to_iso(from_date),
-                to_date=self.datetime_to_iso(to_date),
+                from_date=self.from_date_iso,
+                to_date=self.to_date_iso,
                 stock_code=actual_stock_code,
                 exchange_code=actual_exchange_code,
                 product_type=actual_product_type,
-                expiry_date=expiry_date,
+                expiry_date=self.expiry_date_iso,
                 right=self.right
             )
             print(f"  API returned {len(hist_data)} records")
@@ -381,16 +404,32 @@ class DataHandler:
         else:
             print(f"[INFO] Fetching data from API for {self.stock_code} (ISEC: {getattr(self, 'isec_stock_code', 'N/A')})")
             try:
+                # Ensure all dates are in ISO 8601 format (2025-03-24T09:15:00.000Z)
+                def ensure_iso_format(dt):
+                    if isinstance(dt, str):
+                        # If it's already in ISO format, return as-is
+                        if 'T' in dt and 'Z' in dt:
+                            return dt
+                        # If it's in 'dd-MMM-yyyy' format, convert to ISO
+                        try:
+                            dt_obj = datetime.strptime(dt, '%d-%b-%Y')
+                            return dt_obj.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+                        except ValueError:
+                            return dt  # Return as-is if parsing fails
+                    elif isinstance(dt, (datetime, pd.Timestamp)):
+                        return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+                    return dt
+                
                 api_params = {
                     "interval": self.interval,
-                    "from_date": self.from_date,
-                    "to_date": self.to_date,
+                    "from_date": self.from_date_iso,
+                    "to_date": self.to_date_iso,
                     "stock_code": getattr(self, 'isec_stock_code', self.stock_code), # Crucial: use validated ISEC code
                     "exchange_code": self.exchange_code,
                 }
 
                 if self.product_type in ['futures', 'options']:
-                    api_params["expiry_date"] = self.expiry_date
+                    api_params["expiry_date"] = self.expiry_date_iso
                     api_params["product_type"] = self.product_type
                     if self.product_type == 'options':
                         api_params["right"] = self.right
