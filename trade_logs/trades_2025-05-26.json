@@ -1,0 +1,38 @@
+[
+  {
+    "order_id": "20250526Z100033967",
+    "symbol": "TATMOT",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 729.95,
+    "timestamp": "2025-05-26T14:47:00.988042",
+    "status": "PENDING",
+    "reason": "Relaxed approach: 6/6 conditions met",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250526Z100034472",
+    "symbol": "TATMOT",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 729.5,
+    "timestamp": "2025-05-26T14:56:01.472534",
+    "status": "PENDING",
+    "reason": "Relaxed approach: 6/6 conditions met",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250526Z100035026",
+    "symbol": "LIC",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 870.0,
+    "timestamp": "2025-05-26T15:04:01.738941",
+    "status": "PENDING",
+    "reason": "Relaxed approach: 6/6 conditions met",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  }
+]

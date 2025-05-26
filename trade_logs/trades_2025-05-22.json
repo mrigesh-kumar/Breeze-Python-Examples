@@ -1,0 +1,86 @@
+[
+  {
+    "order_id": "20250522Z100033268",
+    "symbol": "ONGC",
+    "action": "SELL",
+    "quantity": 1,
+    "price": 240.2,
+    "timestamp": "2025-05-22T14:51:00.584280",
+    "status": "EXECUTED",
+    "reason": "Relaxed approach: only 1/6 conditions met"
+  },
+  {
+    "order_id": "20250522Z100033268",
+    "symbol": "ONGC",
+    "action": "SELL",
+    "quantity": 1,
+    "price": 240.2,
+    "timestamp": "2025-05-22T14:51:00.585415",
+    "reason": "Relaxed approach: only 1/6 conditions met",
+    "stop_loss": null,
+    "take_profit": null
+  },
+  {
+    "order_id": "20250522Z100033709",
+    "symbol": "ONGC",
+    "action": "SELL",
+    "quantity": 1,
+    "price": 241.4,
+    "timestamp": "2025-05-22T14:57:00.435700",
+    "status": "EXECUTED",
+    "reason": "Relaxed approach: only 2/6 conditions met"
+  },
+  {
+    "order_id": "20250522Z100033709",
+    "symbol": "ONGC",
+    "action": "SELL",
+    "quantity": 1,
+    "price": 241.4,
+    "timestamp": "2025-05-22T14:57:00.437962",
+    "reason": "Relaxed approach: only 2/6 conditions met",
+    "stop_loss": null,
+    "take_profit": null
+  },
+  {
+    "order_id": "20250522Z100033785",
+    "symbol": "ONGC",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 241.62,
+    "timestamp": "2025-05-22T14:58:00.502330",
+    "status": "EXECUTED",
+    "reason": "Relaxed approach: 4/6 conditions met; MACD bullish crossover"
+  },
+  {
+    "order_id": "20250522Z100033785",
+    "symbol": "ONGC",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 241.62,
+    "timestamp": "2025-05-22T14:58:00.503355",
+    "reason": "Relaxed approach: 4/6 conditions met; MACD bullish crossover",
+    "stop_loss": null,
+    "take_profit": null
+  },
+  {
+    "order_id": "20250522Z100033949",
+    "symbol": "ONGC",
+    "action": "SELL",
+    "quantity": 1,
+    "price": 241.59,
+    "timestamp": "2025-05-22T15:00:00.387192",
+    "status": "EXECUTED",
+    "reason": "Strict Triple Screen sell conditions met; Price below EMA50 (trend reversal)"
+  },
+  {
+    "order_id": "20250522Z100033949",
+    "symbol": "ONGC",
+    "action": "SELL",
+    "quantity": 1,
+    "price": 241.59,
+    "timestamp": "2025-05-22T15:00:00.387660",
+    "reason": "Strict Triple Screen sell conditions met; Price below EMA50 (trend reversal)",
+    "stop_loss": null,
+    "take_profit": null
+  }
+]

@@ -1,0 +1,110 @@
+[
+  {
+    "order_id": "20250523Z100033497",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 237.92,
+    "timestamp": "2025-05-23T14:57:01.365500",
+    "status": "PENDING",
+    "reason": "Profit target: Price 237.92 near Support 237.70",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100033702",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 238.2,
+    "timestamp": "2025-05-23T15:00:00.591554",
+    "status": "PENDING",
+    "reason": "Profit target: Price 238.20 near Support 237.70",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100033865",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 238.16,
+    "timestamp": "2025-05-23T15:02:00.447242",
+    "status": "PENDING",
+    "reason": "Profit target: Price 238.16 near Support 237.70",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100034072",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 238.05,
+    "timestamp": "2025-05-23T15:04:00.421713",
+    "status": "PENDING",
+    "reason": "Profit target: Price 238.05 near Support 237.70",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100034245",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 237.64,
+    "timestamp": "2025-05-23T15:06:00.503676",
+    "status": "PENDING",
+    "reason": "Profit target: Price 237.64 near Support 237.50",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100034381",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 237.53,
+    "timestamp": "2025-05-23T15:08:01.247043",
+    "status": "PENDING",
+    "reason": "Profit target: Price 237.53 near Support 237.40",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100034636",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 237.05,
+    "timestamp": "2025-05-23T15:11:01.121281",
+    "status": "PENDING",
+    "reason": "Strict Triple Screen sell conditions met; Profit target: Price 237.05 near Support 236.50",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100034833",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 237.45,
+    "timestamp": "2025-05-23T15:13:01.059993",
+    "status": "PENDING",
+    "reason": "Profit target: Price 237.45 near Support 236.50",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  },
+  {
+    "order_id": "20250523Z100035029",
+    "symbol": "ZOMLIM",
+    "action": "BUY",
+    "quantity": 1,
+    "price": 237.58,
+    "timestamp": "2025-05-23T15:15:00.328919",
+    "status": "PENDING",
+    "reason": "Profit target: Price 237.58 near Support 236.50",
+    "filled_quantity": 0,
+    "pending_quantity": 1
+  }
+]

@@ -76,6 +76,7 @@ class TripleScreenStrategy(bt.Strategy):
         ('min_volume_ratio', 1.0),
         ('trail_atr_mult', 1.5),  # ATR multiplier for trailing stop
         ('min_trail_distance', 0.5),  # Min profit % before trailing
+        ('adx_threshold', 20),  # Minimum ADX to avoid low-trend / choppy markets
         # Stock-specific optimization parameters
         ('jiofin_trail_atr_mult', 1.5),  # JIOFIN-specific ATR multiplier
         ('reliance_trail_atr_mult', 1.2),  # RELIANCE-specific ATR multiplier
@@ -119,6 +120,7 @@ class TripleScreenStrategy(bt.Strategy):
         self.stop_orders = {}
         self.order_dict = {}  # Track order references and their entry prices
         self.profit_target_orders = {}
+        self.order_pos_map = {}  # Map order.ref to position keys for easy lookup when orders complete
         self.total_holding_periods_winners = 0
         self.total_holding_periods_losers = 0
         self.active_positions = 0
@@ -144,13 +146,28 @@ class TripleScreenStrategy(bt.Strategy):
         self.ema = bt.indicators.EMA(self.data, period=20)
         self.macd = bt.indicators.MACD(self.data)
         self.macd_hist = self.macd.macd - self.macd.signal
+        self.adx = bt.indicators.ADX(self.data, period=14)
+        # Volume strength (current volume vs EMA of volume)
+        self.volume_ema = bt.indicators.EMA(self.data.volume, period=self.p.volume_ema_period)
         # Bollinger Bands
         self.bbands = bt.indicators.BollingerBands(self.data.close, period=20, devfactor=2)
         
         # Determine stock-specific parameters
         self.stock_code = self.datas[0].stock_code if hasattr(self.datas[0], 'stock_code') else None
         self.trail_activated = {}  # Track if trailing is activated for each position
-        
+
+        # --- Cash market fixed size logic ---
+        import configparser, os
+        self.cash_fixed_size = 100  # default fallback
+        try:
+            config = configparser.RawConfigParser()
+            config.read(os.path.join(os.path.dirname(__file__), 'config.properties'))
+            if config.has_option('CASH', 'cash_fixed_size'):
+                self.cash_fixed_size = int(config.get('CASH', 'cash_fixed_size'))
+        except Exception as e:
+            pass  # fallback to default
+        # --- End cash market fixed size logic ---
+
         # Set stock-specific trailing stop parameters if available
         if self.p.use_stock_specific_params and self.stock_code:
             stock_param_name = f"{self.stock_code.lower()}_trail_atr_mult"
@@ -191,6 +208,8 @@ class TripleScreenStrategy(bt.Strategy):
             rsi_val = self.rsi[0]
             macd_val = self.macd.macd[0]
             ema_val = self.ema[0]
+            adx_val = self.adx[0]
+            vol_ratio = (self.data.volume[0] / self.volume_ema[0]) if self.volume_ema[0] != 0 else 0
             
             # Strict conditions (all must be met)
             trend_bullish = True  # Default value if higher_tf_trend not available
@@ -219,7 +238,10 @@ class TripleScreenStrategy(bt.Strategy):
         # Optionally, allow entry if price is near lower band (potential value)
         near_lower_band = price < (bb_lower + (bb_middle - bb_lower) * 0.25)
         # Main entry: All classic conditions + not overbought
-        return (trend_bullish and price_above_ema and macd_bullish and rsi_bullish and atr_ok and not_overbought) or (trend_bullish and near_lower_band and macd_bullish and atr_ok)
+        strong_trend = adx_val >= self.p.adx_threshold
+        volume_ok = vol_ratio >= self.p.min_volume_ratio
+        return ((trend_bullish and price_above_ema and macd_bullish and rsi_bullish and atr_ok and not_overbought and strong_trend and volume_ok)
+                or (trend_bullish and near_lower_band and macd_bullish and atr_ok and strong_trend and volume_ok))
     
     def should_sell(self):
         """Determine if we should sell based on strategy rules
@@ -281,12 +303,12 @@ class TripleScreenStrategy(bt.Strategy):
         stop_order = self.stop_orders[pos_key]
         
         # Calculate new stop price based on ATR
-        if position.size > 0:  # Long position
+        if position['size'] > 0:  # Long position
             # Use ATR-based trailing stop if enabled
             if self.effective_trail_atr_mult > 0:
                 # Calculate current profit percentage
                 current_price = self.data.close[0]
-                entry_price = position.price
+                entry_price = position['price']
                 profit_pct = (current_price - entry_price) / entry_price * 100
                 
                 # Only adjust stop if profit exceeds minimum threshold
@@ -300,7 +322,7 @@ class TripleScreenStrategy(bt.Strategy):
                     # Only move stop up, never down
                     if new_stop > stop_order.price:
                         self.cancel(stop_order)
-                        new_stop_order = self.sell(size=position.size, exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
+                        new_stop_order = self.sell(size=position['size'], exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
                         self.stop_orders[pos_key] = new_stop_order
                         # self.log(f"Trailing stop updated for position {pos_key}: {new_stop:.2f} (ATR: {self.atr[0]:.2f}, Profit: {profit_pct:.1f}%)")
             else:
@@ -308,7 +330,7 @@ class TripleScreenStrategy(bt.Strategy):
                 new_stop = position.price * (1.0 - self.p.trailing_pct / 100.0)
                 if new_stop > stop_order.price:
                     self.cancel(stop_order)
-                    new_stop_order = self.sell(size=position.size, exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
+                    new_stop_order = self.sell(size=position['size'], exectype=bt.Order.Stop, price=new_stop, parent=None, transmit=True)
                     self.stop_orders[pos_key] = new_stop_order
                     # self.log(f"Trailing stop updated for position {pos_key}: {new_stop:.2f} (percentage-based)")
         else:  # Short position
@@ -316,7 +338,7 @@ class TripleScreenStrategy(bt.Strategy):
             if self.effective_trail_atr_mult > 0:
                 # Calculate current profit percentage
                 current_price = self.data.close[0]
-                entry_price = position.price
+                entry_price = position['price']
                 profit_pct = (entry_price - current_price) / entry_price * 100
                 
                 # Only adjust stop if profit exceeds minimum threshold
@@ -385,7 +407,7 @@ class TripleScreenStrategy(bt.Strategy):
                 # Only log if trade is actually executed
                 if self.position_count < self.p.max_positions:
                     # Funds check before buy
-                    trade_size = 100
+                    trade_size = self.cash_fixed_size
                     trade_price = self.data.close[0]
                     total_cost = trade_size * trade_price
                     available_funds = self.get_available_funds()
@@ -398,6 +420,9 @@ class TripleScreenStrategy(bt.Strategy):
                         self.position_count += 1
                         self.trades_executed += 1  # Increment executed trades counter
                         self.signals_executed += 1  # Count executed signals
+                        # Track entry price and pos_key for later in notify_order
+                        self.order_dict[order.ref] = entry_price
+                        self.order_pos_map[order.ref] = pos_key
                     else:
                         self.log(f"[WARN] Insufficient funds: Needed {total_cost:.2f}, Available {available_funds:.2f}. Trade skipped.")
 
@@ -423,8 +448,19 @@ class TripleScreenStrategy(bt.Strategy):
         
         if order.status == order.Completed:
             if order.isbuy():
-                # self.log(f'BUY EXECUTED: Price: {order.executed.price:.2f}, Size: {order.executed.size}, Cost: {order.executed.value:.2f}')
-                pass
+                # Create initial protective stop immediately after entry completes
+                entry_price = order.executed.price
+                size = order.executed.size
+                # Initial stop based on ATR multiplier
+                stop_price = entry_price - (self.atr[0] * self.effective_trail_atr_mult)
+                if stop_price > 0:
+                    stop_order = self.sell(size=size, exectype=bt.Order.Stop, price=stop_price, parent=None, transmit=True)
+                    # Map the stop order to the position key for later trailing adjustments
+                    pos_key = self.order_pos_map.get(order.ref, None)
+                    if pos_key:
+                        self.stop_orders[pos_key] = stop_order
+                # self.log(f'BUY EXECUTED: Price: {entry_price:.2f}, Initial SL: {stop_price:.2f}')
+                
             else:  # Sell
                 # self.log(f'SELL EXECUTED: Price: {order.executed.price:.2f}, Size: {order.executed.size}, Cost: {order.executed.value:.2f}')
                 pass

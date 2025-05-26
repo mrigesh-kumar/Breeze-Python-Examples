@@ -25,6 +25,9 @@ strategy_stats = {
 config = None
 breeze_conn = None
 
+# Flag to control detailed vs. concise logging
+DETAILED_LOG = False
+
 def initialize_config():
     global config
     if config is None:
@@ -286,20 +289,23 @@ class SimpleTrailingStopStrategy(bt.Strategy):
             'roi': roi
         }
 
-def get_trading_params(config=None):
+def get_trading_params(config=None, use_relaxed=False):
     """Get standard trading parameters from config
     
     Uses standard ATR trailing stop and risk management parameters for all stocks
     from the TRADING_PARAMS section in config.properties.
     """
+    # Determine which section to read: strict vs relaxed
+    target_section = 'RELAXED_PARAMS' if use_relaxed else 'STRICT_PARAMS'
     # Default parameters if config reading fails
     default_params = {
-        'trail_atr_mult': 1.5,
-        'min_trail_distance': 0.4,
-        'risk_pct': 0.75,
+        'trail_atr_mult': 2.2 if not use_relaxed else 1.8,
+        'min_trail_distance': 0.75 if not use_relaxed else 0.6,
+        'risk_pct': 1.0 if not use_relaxed else 0.75,
         'max_risk_pct': 1.5,
-        'position_size_pct': 4.0,
-        'profit_target_mult': 3.5
+        'position_size_pct': 2.5 if not use_relaxed else 3.0,
+        'profit_target_mult': 3.5,
+        'adx_threshold': 25 if not use_relaxed else 22
     }
     
     # Try to read from config file if provided
@@ -309,52 +315,54 @@ def get_trading_params(config=None):
         config_path = os.path.join(os.path.dirname(__file__), 'config.properties')
         config.read(config_path)
     
-    # Read parameters from TRADING_PARAMS section
-    try:
-        if 'TRADING_PARAMS' in config.sections():
-            params = {}
-            
-            # Read ATR trailing stop parameters
-            if 'atr_multiplier' in config['TRADING_PARAMS']:
-                params['trail_atr_mult'] = float(config['TRADING_PARAMS']['atr_multiplier'])
-            else:
-                params['trail_atr_mult'] = default_params['trail_atr_mult']
-                
-            if 'min_profit_threshold' in config['TRADING_PARAMS']:
-                params['min_trail_distance'] = float(config['TRADING_PARAMS']['min_profit_threshold'])
-            else:
-                params['min_trail_distance'] = default_params['min_trail_distance']
-            
-            # Read risk management parameters
-            if 'risk_percentage' in config['TRADING_PARAMS']:
-                params['risk_pct'] = float(config['TRADING_PARAMS']['risk_percentage'])
-            else:
-                params['risk_pct'] = default_params['risk_pct']
-                
-            if 'max_risk_percentage' in config['TRADING_PARAMS']:
-                params['max_risk_pct'] = float(config['TRADING_PARAMS']['max_risk_percentage'])
-            else:
-                params['max_risk_pct'] = default_params['max_risk_pct']
-                
-            if 'position_size_percentage' in config['TRADING_PARAMS']:
-                params['position_size_pct'] = float(config['TRADING_PARAMS']['position_size_percentage'])
-            else:
-                params['position_size_pct'] = default_params['position_size_pct']
-                
-            if 'profit_target_multiplier' in config['TRADING_PARAMS']:
-                params['profit_target_mult'] = float(config['TRADING_PARAMS']['profit_target_multiplier'])
-            else:
-                params['profit_target_mult'] = default_params['profit_target_mult']
-                
-            return params
+    # Prefer dedicated strict/relaxed section; fall back to TRADING_PARAMS
+    section_name = target_section if target_section in config.sections() else 'TRADING_PARAMS'
+    if section_name in config.sections():
+        params = {}
+        
+        # Read ATR trailing stop parameters
+        sec = config[section_name]
+        if 'atr_multiplier' in sec:
+            params['trail_atr_mult'] = float(sec['atr_multiplier'])
         else:
-            # print(f"[INFO] TRADING_PARAMS section not found in config. Using default parameters.")
-            return default_params
-    
-    except Exception as e:
-        # print(f"[WARN] Error reading trading parameters: {e}")
-        return default_params
+            params['trail_atr_mult'] = default_params['trail_atr_mult']
+            
+        if 'min_profit_threshold' in sec:
+            params['min_trail_distance'] = float(sec['min_profit_threshold'])
+        else:
+            params['min_trail_distance'] = default_params['min_trail_distance']
+        
+        # Read risk management parameters
+        if 'risk_percentage' in sec:
+            params['risk_pct'] = float(sec['risk_percentage'])
+        else:
+            params['risk_pct'] = default_params['risk_pct']
+            
+        if 'max_risk_percentage' in sec:
+            params['max_risk_pct'] = float(sec['max_risk_percentage'])
+        else:
+            params['max_risk_pct'] = default_params['max_risk_pct']
+            
+        if 'position_size_percentage' in sec:
+            params['position_size_pct'] = float(sec['position_size_percentage'])
+        else:
+            params['position_size_pct'] = default_params['position_size_pct']
+            
+        if 'profit_target_multiplier' in sec:
+            params['profit_target_mult'] = float(sec['profit_target_multiplier'])
+        else:
+            params['profit_target_mult'] = default_params['profit_target_mult']
 
+        # ADX threshold (optional)
+        if 'adx_threshold' in sec:
+            params['adx_threshold'] = float(sec['adx_threshold'])
+        else:
+            params['adx_threshold'] = default_params['adx_threshold']
+        
+        return params
+    else:
+        # print(f"[INFO] TRADING_PARAMS section not found in config. Using default parameters.")
+        return default_params
 
 def get_optimized_params(stock_code, config=None):
     """Get trailing stop parameters for all stocks
@@ -480,7 +488,7 @@ def run_strategy(stock_code, market_type, use_relaxed=False):
     cerebro.addobserver(bt.observers.Value)
     
     # Get standard trading parameters
-    params = get_trading_params()
+    params = get_trading_params(use_relaxed=use_relaxed)
     trail_atr_mult = params['trail_atr_mult']
     min_trail_distance = params['min_trail_distance']
     
@@ -513,11 +521,12 @@ def run_strategy(stock_code, market_type, use_relaxed=False):
                           min_trail_distance=min_trail_distance,
                           risk_pct=params['risk_pct'],
                           profit_target_atr_mult=params['profit_target_mult'],
-                          max_positions=max_positions)
+                          max_positions=max_positions,
+                          adx_threshold=params.get('adx_threshold', 20))
     results = cerebro.run()[0]
     
-    # Print strategy-level trade stats if available
-    if hasattr(results, 'trade_stats') and results.trade_stats:
+    # Print strategy-level trade stats only when verbose mode is enabled
+    if DETAILED_LOG and hasattr(results, 'trade_stats') and results.trade_stats:
         print("\n[STRATEGY TRADE STATS]")
         print(f"Total trades executed: {results.trade_stats.get('total', 'N/A')}")
         print(f"Win rate: {results.trade_stats.get('win_rate', 'N/A'):.2f}%")
@@ -557,10 +566,11 @@ def run_strategy(stock_code, market_type, use_relaxed=False):
         # Calculate win rate safely
         win_rate = (won_trades / total_closed_trades * 100) if total_closed_trades > 0 else 0
         
-        # Print detailed trade information
-        print("\nDETAILED TRADE INFORMATION")
-        print("-" * 50)
-        print(f"Total trades: {total_closed_trades}")
+        # Print detailed trade information only when verbose mode is ON
+        if DETAILED_LOG:
+            print("\nDETAILED TRADE INFORMATION")
+            print("-" * 50)
+            print(f"Total trades: {total_closed_trades}")
         
         # Print signal information if available
         if hasattr(results, 'signals_processed'):
@@ -586,29 +596,39 @@ def run_strategy(stock_code, market_type, use_relaxed=False):
                 if hasattr(trades_analysis.pnl.gross, 'total'):
                     gross_profit = max(0, trades_analysis.pnl.gross.total)
         
-        print(f"Cumulative profit: {gross_profit:.2f}")
-        print(f"Cumulative loss: {gross_loss:.2f}")
-        print(f"Net P&L: {gross_profit - gross_loss:.2f}")
+        # Always keep gross profit/loss for later use
+        net_pnl = gross_profit - gross_loss
+        if DETAILED_LOG:
+            print(f"Cumulative profit: {gross_profit:.2f}")
+            print(f"Cumulative loss: {gross_loss:.2f}")
+            print(f"Net P&L: {net_pnl:.2f}")
         
         # Print individual trades summary instead of detailed list
-        print("\nTRADE SUMMARY")
-        print("-" * 50)
+        if DETAILED_LOG:
+            print("\nTRADE SUMMARY")
+            print("-" * 50)
         
         # Get trade summary from strategy if available
         if hasattr(results, 'trades_won') and hasattr(results, 'trades_lost'):
-            print(f"Winning trades: {results.trades_won}")
-            print(f"Losing trades: {results.trades_lost}")
+            if DETAILED_LOG:
+                print(f"Winning trades: {results.trades_won}")
+                print(f"Losing trades: {results.trades_lost}")
             
             # Calculate average profit/loss if available
             if hasattr(results, 'total_profit') and results.trades_won > 0:
                 avg_win = results.total_profit / results.trades_won
-                print(f"Average win: {avg_win:.2f}")
+            else:
+                avg_win = 0
             if hasattr(results, 'total_loss') and results.trades_lost > 0:
                 avg_loss = results.total_loss / results.trades_lost
+            else:
+                avg_loss = 0
+            if DETAILED_LOG:
+                print(f"Average win: {avg_win:.2f}")
                 print(f"Average loss: {avg_loss:.2f}")
         
         # Print exit statistics if available
-        if hasattr(results, 'exits_by_take_profit'):
+        if DETAILED_LOG and hasattr(results, 'exits_by_take_profit'):
             print(f"Exits by take profit: {results.exits_by_take_profit}")
         if hasattr(results, 'exits_by_stop_loss'):
             print(f"Exits by stop loss: {results.exits_by_stop_loss}")
@@ -622,7 +642,7 @@ def run_strategy(stock_code, market_type, use_relaxed=False):
             print(f"Positions still active: {results.active_positions}")
             
         # Try to get the exit reasons dictionary if available
-        if hasattr(results, 'exit_reasons') and results.exit_reasons:
+        if DETAILED_LOG and hasattr(results, 'exit_reasons') and results.exit_reasons:
             print("\nEXIT REASONS:")
             for reason, count in results.exit_reasons.items():
                 print(f"{reason}: {count}")
@@ -660,133 +680,42 @@ def run_strategy(stock_code, market_type, use_relaxed=False):
         strategy_stats['lost_trades'] = results.trades_lost
     
     # Get parameters used in the strategy for display
-    params = get_trading_params()
+    params = get_trading_params(use_relaxed=use_relaxed)
     
-    print("\nSTRATEGY PARAMETERS")
-    print("-"*50)
-    print(f"{'Parameter':<25}{'Value':<15}")
-    print("-"*40)
-    print(f"{'Strategy Approach':<25}{'Relaxed' if use_relaxed else 'Strict':<15}")
-    print(f"{'ATR Multiplier':<25}{params['trail_atr_mult']:<15.2f}")
-    print(f"{'Min Profit Threshold':<25}{params['min_trail_distance']:<15.2f}%")
-    print(f"{'Risk Per Trade':<25}{params['risk_pct']:<15.2f}%")
-    print(f"{'Max Risk Per Trade':<25}{params['max_risk_pct']:<15.2f}%")
-    print(f"{'Position Size %':<25}{params['position_size_pct']:<15.2f}%")
-    
-    print("\nSTRATEGY PERFORMANCE")
-    print("-"*50)
-    print(f"{'Metric':<25}{'Value':<15}")
-    print("-"*40)
-    
-    # Get performance metrics
+    # --- CONSOLIDATED SUMMARY OUTPUT ---
+    # Safety for undefined variables
     try:
-        # Sharpe ratio
-        sharpe_analysis = results.analyzers.sharpe.get_analysis()
-        sharpe = sharpe_analysis.get('sharperatio', None)
-        if sharpe is not None:
-            print(f"{'Sharpe Ratio':<25}{sharpe:.4f}")
-        else:
-            print(f"{'Sharpe Ratio':<25}N/A (insufficient data)")
-    except Exception as e:
-        print(f"{'Sharpe Ratio':<25}N/A (Error: {e})")
-    
+        sharpe
+    except NameError:
+        sharpe = None
     try:
-        # Max drawdown
-        max_dd = results.analyzers.drawdown.get_analysis().max.drawdown
-        print(f"{'Max Drawdown':<25}{max_dd:.2f}%")
-    except:
-        print(f"{'Max Drawdown':<25}N/A")
-        
+        max_dd
+    except NameError:
+        max_dd = None
     try:
-        # Total trades
-        trades = results.analyzers.trades.get_analysis()
-        total_trades = trades.total.closed
-        print(f"{'Total Trades':<25}{total_trades}")
-        
-        # Win rate
-        if total_trades > 0:
-            win_rate = (trades.won.total / total_trades) * 100
-            print(f"{'Win Rate':<25}{win_rate:.2f}%")
-        else:
-            print(f"{'Win Rate':<25}N/A (no trades)")
-            
-        # Win/Loss ratio
-        if trades.lost.total > 0:
-            win_loss_ratio = trades.won.total / trades.lost.total
-            print(f"{'Win/Loss Ratio':<25}{win_loss_ratio:.2f}")
-        else:
-            print(f"{'Win/Loss Ratio':<25}N/A (no losing trades)")
-    except:
-        print(f"{'Total Trades':<25}N/A")
-        print(f"{'Win Rate':<25}N/A")
-        print(f"{'Win/Loss Ratio':<25}N/A")
-        
-    try:
-        # PnL metrics
-        pnl_data = results.analyzers.pnl.get_analysis()
-        gross_profit = pnl_data.gross.total
-        print(f"{'Gross Profit':<25}{gross_profit:.2f}")
-        net_profit = pnl_data.net.total
-        print(f"{'Net Profit':<25}{net_profit:.2f}")
-    except:
-        print(f"{'Gross Profit':<25}N/A")
-        print(f"{'Net Profit':<25}N/A")
-        
-    try:
-        # Return
-        final_value = results.broker.getvalue()
-        initial = 100000.0  # Initial cash
-        
-        total_return = (final_value - initial) / initial * 100
-        print(f"{'Return':<25}{total_return:.2f}%")
-        
-        # Print final summary with stock name
-        print("\n" + "-"*50)
-        stock_display = stock_code
-        approach_display = "RELAXED" if use_relaxed else "STRICT"
-        
-        # Always initialize the summary
-        summary = f"SUMMARY: {stock_display} ({approach_display})"
-        
-        # Use global strategy stats
-        if 'strategy_stats' not in globals() or strategy_stats is None:
-            # Initialize if needed
-            strategy_stats = {}
+        net_pnl
+    except NameError:
+        net_pnl = gross_profit - gross_loss if 'gross_profit' in locals() else 0
 
-        # Determine if we should use the current strategy stats or calculate from results
-        use_current_stats = ('stock_code' in strategy_stats and 
-                           strategy_stats.get('stock_code') == stock_code and
-                           'total_trades' in strategy_stats)
-
-        # Add return information
-        if use_current_stats and 'roi' in strategy_stats:
-            summary += f" - Return: {strategy_stats['roi']:.2f}%"
-        else:
-            summary += f" - Return: {total_return:.2f}%"
-            
-        # Add trade count information  
-        if use_current_stats and 'total_trades' in strategy_stats and strategy_stats['total_trades'] > 0:
-            summary += f", Trades: {strategy_stats['total_trades']}"
-        elif hasattr(results, 'trades_executed') and results.trades_executed > 0:
-            summary += f", Trades: {results.trades_executed}"
-        else:
-            summary += f", Trades: 0"
-            
-        # Add win rate information
-        if use_current_stats and 'win_rate' in strategy_stats and strategy_stats['win_rate'] > 0:
-            summary += f", Win Rate: {strategy_stats['win_rate']:.1f}%"
-        elif hasattr(results, 'trades_executed') and results.trades_executed > 0 and hasattr(results, 'trades_won'):
-            win_rate = (results.trades_won / results.trades_executed) * 100
-            summary += f", Win Rate: {win_rate:.1f}%"
-        else:
-            summary += f", Win Rate: 0.0%"
-            
-        print(summary)
-            
-        print("-"*50)
-    except Exception as e:
-        print(f"{'Return':<25}N/A (Error: {e})")
-
+    print("\n================ CONSOLIDATED REPORT ===============")
+    print(f"Stock: {stock_code} | Approach: {'Relaxed' if use_relaxed else 'Strict'}")
+    print("--------------------------------------------------")
+    print("TRADE PERFORMANCE:")
+    print(f"  Trades Executed : {strategy_stats['total_trades']}")
+    print(f"  Wins / Losses   : {won_trades} / {lost_trades}")
+    print(f"  Win Rate        : {strategy_stats['win_rate']:.2f}%")
+    print(f"  Avg Win / Loss  : {avg_win:.2f} / {avg_loss:.2f}")
+    print(f"  Net Profit      : {net_pnl:.2f}")
+    print("--------------------------------------------------")
+    print("STRATEGY PERFORMANCE:")
+    print(f"  Return          : {roi:.2f}%")
+    if max_dd is not None:
+        print(f"  Max Drawdown    : {max_dd:.2f}%")
+    if sharpe is not None:
+        print(f"  Sharpe Ratio    : {sharpe:.4f}")
+    print("==================================================\n")
+    # --- END CONSOLIDATED SUMMARY ---
+    
 def run_multi_stock_comparison():
     """Run strategy for all stocks defined in config file"""
     # Read config file

@@ -78,6 +78,10 @@ def get_order_detail(order_id=None, exchange_code=None):
     order_id = order_id or get_config('ORDER', 'order_id')
     exchange_code = exchange_code or get_config('ORDER', 'exchange_code')
     return breeze.get_order_detail(exchange_code=exchange_code, order_id=order_id)
+    
+def get_funds():
+    """Get available funds from the Breeze API"""
+    return breeze.get_funds()
 
 def get_order_list(exchange_code=None, from_date=None, to_date=None):
     exchange_code = exchange_code or get_config('ORDER', 'exchange_code')
